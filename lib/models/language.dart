@@ -91,7 +91,7 @@ const vadPack = EnginePack(
     PackFile(
       url: 'https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx',
       fileName: 'silero_vad.onnx',
-      sizeMb: 3,
+      sizeMb: 2,
     ),
   ],
 );

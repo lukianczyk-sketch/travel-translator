@@ -54,8 +54,9 @@ class ModelManager extends ChangeNotifier {
     for (final f in p.files) {
       final file = File(filePath(f.fileName));
       if (!await file.exists()) return false;
-      // Guard against half-written files (sizes are approximate, allow 10%).
-      if (await file.length() < f.sizeMb * 1024 * 1024 * 0.9) return false;
+      // Guard against half-written files. Sizes are approximate (and small
+      // files round badly), so only reject if it's clearly incomplete.
+      if (await file.length() < f.sizeMb * 1000 * 1000 * 0.6) return false;
     }
     return true;
   }
@@ -77,7 +78,7 @@ class ModelManager extends ChangeNotifier {
       for (final f in p.files) {
         final target = filePath(f.fileName);
         if (await File(target).exists() &&
-            await File(target).length() >= f.sizeMb * 1024 * 1024 * 0.9) {
+            await File(target).length() >= f.sizeMb * 1000 * 1000 * 0.6) {
           doneMb += f.sizeMb;
           continue;
         }
