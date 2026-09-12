@@ -45,4 +45,47 @@ for name in ("android/app/build.gradle.kts", "android/app/build.gradle"):
         t = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 24", t)
         g.write_text(t)
 
+# Some plugins (onnxruntime) still declare compileSdk 33; modern AndroidX libs
+# require >= 34. Raise any subproject that is too low.
+root_kts = pathlib.Path("android/build.gradle.kts")
+root_groovy = pathlib.Path("android/build.gradle")
+if root_kts.exists():
+    t = root_kts.read_text()
+    if "raiseCompileSdk" not in t:
+        t += """
+
+// raiseCompileSdk: bump plugins stuck on an old compileSdk
+subprojects {
+    afterEvaluate {
+        val android = extensions.findByName("android") ?: return@afterEvaluate
+        val current = android.withGroovyBuilder { getProperty("compileSdkVersion") }?.toString() ?: ""
+        val level = Regex("android-(\\d+)").find(current)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        if (level in 1..34) {
+            android.withGroovyBuilder { "compileSdkVersion"(35) }
+        }
+    }
+}
+"""
+        root_kts.write_text(t)
+elif root_groovy.exists():
+    t = root_groovy.read_text()
+    if "raiseCompileSdk" not in t:
+        t += """
+
+// raiseCompileSdk: bump plugins stuck on an old compileSdk
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            def current = project.android.compileSdkVersion?.toString() ?: ""
+            def m = (current =~ /android-(\\d+)/)
+            def level = m.find() ? m.group(1).toInteger() : 0
+            if (level > 0 && level < 35) {
+                project.android.compileSdkVersion 35
+            }
+        }
+    }
+}
+"""
+        root_groovy.write_text(t)
+
 print("Platforms patched.")
