@@ -6,8 +6,8 @@ import '../services/pipeline.dart';
 import '../theme.dart';
 
 class ConversationScreen extends StatefulWidget {
-  final Language language;
-  const ConversationScreen({super.key, required this.language});
+  final List<Language> languages;
+  const ConversationScreen({super.key, required this.languages});
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -15,7 +15,7 @@ class ConversationScreen extends StatefulWidget {
 
 class _ConversationScreenState extends State<ConversationScreen>
     with SingleTickerProviderStateMixin {
-  late final Pipeline _pipe = Pipeline(widget.language);
+  late final Pipeline _pipe = Pipeline(widget.languages);
   bool _bigText = false;
   bool _showLatency = false;
 
@@ -41,11 +41,12 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   Widget build(BuildContext context) {
-    final lang = widget.language;
     final big = _bigText ? 1.35 : 1.0;
     return AnimatedBuilder(
       animation: _pipe,
       builder: (context, _) {
+        final lang = _pipe.other;
+        final multi = widget.languages.length > 1;
         final last = _pipe.last;
         final themLast = last != null && last.fromThem ? last : _lastFrom(true);
         final youLast = last != null && !last.fromThem ? last : _lastFrom(false);
@@ -56,7 +57,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                 child: _Panel(
                   color: Palette.them,
                   soft: Palette.themSoft,
-                  label: '${lang.flag}  THEM  →  ENGLISH',
+                  label: multi ? '${widget.languages.map((l) => l.flag).join(' ')}  THEM  →  ENGLISH' : '${lang.flag}  THEM  →  ENGLISH',
                   active: _pipe.turn == Turn.them || (_pipe.turn == Turn.speaking && (last?.fromThem ?? false)),
                   original: themLast?.original ?? '',
                   translated: themLast?.translated ??

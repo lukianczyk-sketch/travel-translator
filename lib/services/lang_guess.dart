@@ -91,6 +91,41 @@ class LangGuess {
     'vi': 'ăâđêôơưàảãáạằẳẵắặầẩẫấậèẻẽéẹềểễếệìỉĩíịòỏõóọồổỗốộờởỡớợùủũúụừửữứựỳỷỹýỵ',
   };
 
+  /// Which of [candidates] is [text] in? Returns null for English.
+  static Language? detect(String text, List<Language> candidates) {
+    final t = text.toLowerCase();
+    // Scripts settle it instantly.
+    for (final c in candidates) {
+      final script = _scripts[c.code];
+      if (script != null && RegExp(script).hasMatch(t)) return c;
+    }
+    final words = t.split(RegExp(r'[^\p{L}]+', unicode: true)).where((w) => w.isNotEmpty).toList();
+    var english = 0.0;
+    for (final w in words) {
+      if (_en.contains(w)) english += 1;
+    }
+    Language? best;
+    var bestScore = 0.0;
+    for (final c in candidates) {
+      if (_scripts.containsKey(c.code)) continue; // script didn't match → not it
+      var score = 0.0;
+      final accents = _accents[c.code] ?? '';
+      for (final ch in t.runes) {
+        if (accents.contains(String.fromCharCode(ch))) score += 2;
+      }
+      final theirs = _words[c.code] ?? const <String>{};
+      for (final w in words) {
+        if (theirs.contains(w)) score += 1;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    if (best == null) return null;
+    return english >= bestScore ? null : best;
+  }
+
   /// True if [text] is English rather than [other].
   static bool isEnglish(String text, Language other) {
     final t = text.toLowerCase();

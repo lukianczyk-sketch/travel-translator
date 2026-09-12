@@ -32,8 +32,12 @@ class Exchange {
 
 /// Owns the live conversation. One instance per TALK session.
 class Pipeline extends ChangeNotifier {
-  final Language other;
-  Pipeline(this.other);
+  /// Languages that may be spoken to us (one or several).
+  final List<Language> others;
+
+  /// The language we currently answer in — the last one spoken to us.
+  Language other;
+  Pipeline(this.others) : other = others.first;
 
   final Listener _listener = Listener();
   final Translator _translator = Translator();
@@ -132,7 +136,11 @@ class Pipeline extends ChangeNotifier {
       return;
     }
 
-    final fromThem = !LangGuess.isEnglish(text, other);
+    final detected = others.length == 1
+        ? (LangGuess.isEnglish(text, other) ? null : other)
+        : LangGuess.detect(text, others);
+    final fromThem = detected != null;
+    if (fromThem && detected != other) other = detected;
     final src = fromThem ? other.nllbCode : english.nllbCode;
     final tgt = fromThem ? english.nllbCode : other.nllbCode;
     turn = fromThem ? Turn.them : Turn.you;

@@ -16,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _pulse =
       AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-  Language? _selected;
+  final Set<String> _picked = {};
 
   @override
   void dispose() {
@@ -26,9 +26,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<void> _start() async {
     final mm = ModelManager.instance;
-    final lang = _selected;
-    if (lang == null) {
-      _toast('Pick a language first.');
+    final picked = travelLanguages.where((l) => _picked.contains(l.code)).toList();
+    if (picked.isEmpty) {
+      _toast('Pick at least one language first.');
       return;
     }
     if (!mm.allEnginesReady) {
@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         transitionDuration: const Duration(milliseconds: 350),
         pageBuilder: (_, a, __) => FadeTransition(
           opacity: a,
-          child: ConversationScreen(language: lang),
+          child: ConversationScreen(languages: picked),
         ),
       ),
     );
@@ -62,8 +62,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       builder: (context, _) {
         final mm = ModelManager.instance;
         final langs = mm.installedLanguages;
-        if (_selected != null && !langs.contains(_selected)) _selected = null;
-        _selected ??= langs.isNotEmpty ? langs.first : null;
+        _picked.removeWhere((c) => !langs.any((l) => l.code == c));
+        if (_picked.isEmpty && langs.isNotEmpty) _picked.add(langs.first.code);
 
         return SafeArea(
           child: LayoutBuilder(
@@ -85,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     _ReadyRow(ready: mm.allEnginesReady),
                     const SizedBox(height: 18),
                     Text(
-                      langs.isEmpty ? 'NO LANGUAGES YET' : 'THEY SPEAK',
+                      langs.isEmpty ? 'NO LANGUAGES YET' : 'THEY SPEAK  ·  tap one or several',
                       style: const TextStyle(
                         color: Palette.muted,
                         fontSize: 13,
@@ -108,9 +108,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           separatorBuilder: (_, __) => const SizedBox(width: 10),
                           itemBuilder: (_, i) {
                             final l = langs[i];
-                            final on = l == _selected;
+                            final on = _picked.contains(l.code);
                             return GestureDetector(
-                              onTap: () => setState(() => _selected = l),
+                              onTap: () => setState(() {
+                                if (on && _picked.length > 1) {
+                                  _picked.remove(l.code);
+                                } else {
+                                  _picked.add(l.code);
+                                }
+                              }),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -144,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       child: Center(
                         child: _TalkButton(
                           pulse: _pulse,
-                          enabled: langs.isNotEmpty && mm.allEnginesReady,
+                          enabled: _picked.isNotEmpty && mm.allEnginesReady,
                           onTap: _start,
                           size: btn,
                         ),
