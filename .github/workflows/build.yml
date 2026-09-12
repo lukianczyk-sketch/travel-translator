@@ -47,6 +47,14 @@ jobs:
           name: TravelTranslator-Android-APK
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
+      - name: Publish APK to the "latest" release (direct phone download)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk TravelTranslator.apk
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Travel Translator — latest build" --notes "Always the newest build. Tap TravelTranslator.apk on your Android phone to install." --latest
+          gh release upload latest TravelTranslator.apk --clobber
+
       - name: Publish build log to repo (on failure)
         if: failure()
         shell: bash
@@ -87,6 +95,13 @@ jobs:
         with:
           name: TravelTranslator-iPhone-IPA
           path: TravelTranslator.ipa
+
+      - name: Publish IPA to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Travel Translator — latest build" --notes "Always the newest build. Tap TravelTranslator.apk on your Android phone to install." --latest
+          gh release upload latest TravelTranslator.ipa --clobber
 
       - name: Publish build log to repo (on failure)
         if: failure()
