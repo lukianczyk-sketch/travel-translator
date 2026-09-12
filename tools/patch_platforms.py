@@ -55,15 +55,16 @@ if root_kts.exists():
         t += """
 
 // raiseCompileSdk: bump plugins stuck on an old compileSdk
-subprojects {
-    afterEvaluate {
-        val android = extensions.findByName("android") ?: return@afterEvaluate
-        val current = android.withGroovyBuilder { getProperty("compileSdkVersion") }?.toString() ?: ""
-        val level = Regex("android-([0-9]+)").find(current)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        if (level in 1..34) {
-            android.withGroovyBuilder { "compileSdkVersion"(35) }
-        }
+fun Project.raiseCompileSdk() {
+    val android = extensions.findByName("android") ?: return
+    val current = android.withGroovyBuilder { getProperty("compileSdkVersion") }?.toString() ?: ""
+    val level = Regex("android-([0-9]+)").find(current)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    if (level in 1..34) {
+        android.withGroovyBuilder { "compileSdkVersion"(35) }
     }
+}
+subprojects {
+    if (state.executed) raiseCompileSdk() else afterEvaluate { raiseCompileSdk() }
 }
 """
         root_kts.write_text(t)
@@ -73,17 +74,18 @@ elif root_groovy.exists():
         t += """
 
 // raiseCompileSdk: bump plugins stuck on an old compileSdk
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            def current = project.android.compileSdkVersion?.toString() ?: ""
-            def m = (current =~ /android-([0-9]+)/)
-            def level = m.find() ? m.group(1).toInteger() : 0
-            if (level > 0 && level < 35) {
-                project.android.compileSdkVersion 35
-            }
+def raiseCompileSdk = { project ->
+    if (project.hasProperty("android")) {
+        def current = project.android.compileSdkVersion?.toString() ?: ""
+        def m = (current =~ /android-([0-9]+)/)
+        def level = m.find() ? m.group(1).toInteger() : 0
+        if (level > 0 && level < 35) {
+            project.android.compileSdkVersion 35
         }
     }
+}
+subprojects { project ->
+    if (project.state.executed) raiseCompileSdk(project) else project.afterEvaluate { raiseCompileSdk(project) }
 }
 """
         root_groovy.write_text(t)
