@@ -1,0 +1,44 @@
+Running Gradle task 'assembleRelease'...                        
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): flutter_tts, record_android
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+Checking the license for package Android SDK Platform 33 in /usr/local/lib/android/sdk/licenses
+License for package Android SDK Platform 33 accepted.
+Preparing "Install Android SDK Platform 33 (revision 3)".
+"Install Android SDK Platform 33 (revision 3)" ready.
+Installing Android SDK Platform 33 in /usr/local/lib/android/sdk/platforms/android-33
+"Install Android SDK Platform 33 (revision 3)" complete.
+"Install Android SDK Platform 33 (revision 3)" finished.
+lib/services/lang_guess.dart:14:50: Error: Constant evaluation error:
+  static const Map<String, Set<String>> _words = {
+                                                 ^
+lib/services/lang_guess.dart:18:90: Context: The element '"ich"' conflicts with another existing element in the set.
+      'mit', 'was', 'wie', 'wo', 'bitte', 'danke', 'ja', 'nein', 'haben', 'gut', 'auch', 'ich'},
+                                                                                         ^
+lib/services/lang_guess.dart:14:41: Context: While analyzing:
+  static const Map<String, Set<String>> _words = {
+                                        ^
+Target kernel_snapshot_program failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildRelease'.
+> Process 'command '/opt/hostedtoolcache/flutter/stable-3.47.4-x64/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 52s
+[=========                              ] 25%                                   
+Running Gradle task 'assembleRelease'...                          172.8s
+Gradle task assembleRelease failed with exit code 1
