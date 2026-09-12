@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/language.dart';
 import 'book_store.dart';
+import 'diag.dart';
 import 'lang_guess.dart';
 import 'listener.dart';
 import 'model_manager.dart';
@@ -59,30 +60,43 @@ class Pipeline extends ChangeNotifier {
   int _wavSeq = 0;
   bool _stopped = false;
 
+  void _log(String m) => Diag.instance.log(m);
+
   Future<void> start() async {
     final mm = ModelManager.instance;
-    _stt = SpeechToText(modelPath: mm.filePath('ggml-large-v3-turbo-q8_0.bin'));
+    _log('pipeline start: languages=${others.map((l) => l.code).join(',')}');
+    _stt = SpeechToText(
+      modelPath: mm.filePath('ggml-large-v3-turbo-q8_0.bin'),
+      threads: Diag.instance.whisperThreads,
+    )..fast = Diag.instance.fastWhisper;
     await WakelockPlus.enable();
 
     status = 'Waking up the brain…';
     notifyListeners();
+    _log('loading NLLB…');
+    final tb = DateTime.now();
     await _translator.start(
       encoderPath: mm.filePath('nllb_encoder.onnx'),
       decoderPath: mm.filePath('nllb_decoder.onnx'),
       tokenizerPath: mm.filePath('nllb_tokenizer.json'),
     );
 
+    _log('NLLB ready in ${DateTime.now().difference(tb).inMilliseconds} ms');
     status = 'Warming up the ears…';
     notifyListeners();
     final warm = await ensureSilentWav(mm.modelsPath);
+    final tw = DateTime.now();
     await _stt!.warmUp(warm);
+    _log('Whisper warm in ${DateTime.now().difference(tw).inMilliseconds} ms (fast=${_stt!.fast}, threads=${_stt!.threads})');
     await _speaker.init();
+    _log('TTS ready');
 
     status = 'Listening';
     ready = true;
     notifyListeners();
 
     await _listener.start(mm.filePath('silero_vad.onnx'));
+    _log('mic + VAD listening');
     _lvlSub = _listener.level.listen((p) {
       level = p;
       if (turn == Turn.listening && _listener.speaking) {
@@ -93,6 +107,7 @@ class Pipeline extends ChangeNotifier {
       notifyListeners();
     });
     _uttSub = _listener.utterances.listen((pcm) {
+      _log('utterance captured: ${(pcm.length / Listener.sampleRate).toStringAsFixed(2)} s');
       _queue.add(pcm);
       _drain();
     });
@@ -119,10 +134,13 @@ class Pipeline extends ChangeNotifier {
 
     final path = '${ModelManager.instance.modelsPath}/utt_${_wavSeq++ % 4}.wav';
     await writeWav(pcm, path);
+    _log('whisper: transcribing…');
     String text;
     try {
       text = await _stt!.transcribe(path);
+      _log('whisper: "${text.length > 80 ? '${text.substring(0, 80)}…' : text}" in ${DateTime.now().difference(t0).inMilliseconds} ms');
     } catch (e) {
+      _log('ERROR whisper: $e');
       status = 'Ears error: $e';
       turn = Turn.listening;
       notifyListeners();
@@ -130,6 +148,7 @@ class Pipeline extends ChangeNotifier {
     }
     final t1 = DateTime.now();
     if (SpeechToText.looksLikeNoise(text)) {
+      _log('whisper: ignored as noise');
       turn = Turn.listening;
       status = 'Listening';
       notifyListeners();
@@ -141,6 +160,7 @@ class Pipeline extends ChangeNotifier {
         : LangGuess.detect(text, others);
     final fromThem = detected != null;
     if (fromThem && detected != other) other = detected;
+    _log('direction: ${fromThem ? '${other.code} → en' : 'en → ${other.code}'}');
     final src = fromThem ? other.nllbCode : english.nllbCode;
     final tgt = fromThem ? english.nllbCode : other.nllbCode;
     turn = fromThem ? Turn.them : Turn.you;
@@ -156,9 +176,12 @@ class Pipeline extends ChangeNotifier {
     var voiceAt = t1;
     for (final s in sentences) {
       String tr;
+      final tm = DateTime.now();
       try {
         tr = await _translator.translate(s, src, tgt);
+        _log('nllb: "${tr.length > 80 ? '${tr.substring(0, 80)}…' : tr}" in ${DateTime.now().difference(tm).inMilliseconds} ms');
       } catch (e) {
+        _log('ERROR nllb: $e');
         tr = '[translation error]';
       }
       if (!spokenStarted) t2 = DateTime.now();
@@ -181,7 +204,13 @@ class Pipeline extends ChangeNotifier {
         status = fromThem ? 'In your ear…' : 'Speaking for you…';
         _listener.muted = true; // don't hear ourselves
         notifyListeners();
-        await _speaker.say(tr, last!.speakLocale);
+        _log('tts: speaking (${last!.speakLocale})');
+        try {
+          await _speaker.say(tr, last!.speakLocale);
+        } catch (e) {
+          _log('ERROR tts: $e');
+        }
+        _log('tts: done');
       }
     }
     if (!spokenStarted) {
@@ -224,6 +253,7 @@ class Pipeline extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _log('pipeline stop');
     _stopped = true;
     await _uttSub?.cancel();
     await _lvlSub?.cancel();

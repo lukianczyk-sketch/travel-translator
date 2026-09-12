@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/language.dart';
+import '../services/diag.dart';
 import '../services/pipeline.dart';
 import '../theme.dart';
 
@@ -26,6 +27,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   void initState() {
     super.initState();
     _pipe.start().catchError((e) {
+      Diag.instance.log('ERROR pipeline start: $e');
       if (mounted) {
         setState(() => _pipe.status = 'Could not start: $e');
       }
@@ -197,48 +199,87 @@ class _StatusBar extends StatelessWidget {
         ? 'hear ${_s(lat.hearMs)} · translate ${_s(lat.translateMs)} · total ${_s(lat.totalMs)}'
         : pipe.status;
     return Container(
-      height: 92,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       color: Palette.bg2,
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _RoundBtn(icon: Icons.stop_rounded, color: Palette.them, onTap: onStop, size: 62),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              _RoundBtn(icon: Icons.stop_rounded, color: Palette.them, onTap: onStop, size: 56),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Dots(wave: wave, level: pipe.level, live: pipe.ready),
-                    const SizedBox(width: 10),
-                    Text(label,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                    Row(
+                      children: [
+                        _Dots(wave: wave, level: pipe.level, live: pipe.ready),
+                        const SizedBox(width: 10),
+                        Text(label,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(sub,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: showLatency ? Palette.gold : Palette.muted,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(sub,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: showLatency ? Palette.gold : Palette.muted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
+              ),
+            ],
           ),
-          _RoundBtn(icon: Icons.replay_rounded, color: Palette.card, onTap: onReplay),
-          const SizedBox(width: 8),
-          _RoundBtn(icon: Icons.speed_rounded, color: showLatency ? Palette.gold : Palette.card, onTap: onLatency),
-          const SizedBox(width: 8),
-          _RoundBtn(icon: Icons.format_size_rounded, color: bigText ? Palette.gold : Palette.card, onTap: onBigText),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _BarBtn(icon: Icons.replay_rounded, label: 'Replay', on: false, onTap: onReplay)),
+              const SizedBox(width: 8),
+              Expanded(child: _BarBtn(icon: Icons.speed_rounded, label: 'Timing', on: showLatency, onTap: onLatency)),
+              const SizedBox(width: 8),
+              Expanded(child: _BarBtn(icon: Icons.format_size_rounded, label: 'Big text', on: bigText, onTap: onBigText)),
+            ],
+          ),
         ],
       ),
     );
   }
 
   static String _s(int ms) => '${(ms / 1000).toStringAsFixed(1)}s';
+}
+
+class _BarBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+  const _BarBtn({required this.icon, required this.label, required this.on, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: on ? Palette.gold : Palette.card,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: on ? Palette.bg : Colors.white),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: on ? Palette.bg : Colors.white)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _RoundBtn extends StatelessWidget {

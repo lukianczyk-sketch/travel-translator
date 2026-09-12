@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 import 'screens/book_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/languages_screen.dart';
 import 'services/book_store.dart';
+import 'services/diag.dart';
 import 'services/model_manager.dart';
 import 'theme.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Diag.instance.init();
+    FlutterError.onError = (details) {
+      Diag.instance.log('ERROR (flutter): ${details.exceptionAsString()}');
+      FlutterError.presentError(details);
+    };
+    await _boot();
+  }, (e, st) {
+    Diag.instance.log('ERROR (uncaught): $e');
+  });
+}
+
+Future<void> _boot() async {
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,

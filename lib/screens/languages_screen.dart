@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/language.dart';
 import '../services/model_manager.dart';
 import '../theme.dart';
+import 'diag_screen.dart';
 
 class LanguagesScreen extends StatelessWidget {
   const LanguagesScreen({super.key});
@@ -37,6 +38,16 @@ class LanguagesScreen extends StatelessWidget {
                 (l) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _LanguageTile(lang: l, installed: mm.isLanguageInstalled(l.code)),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const DiagScreen()),
+                  ),
+                  icon: const Icon(Icons.bug_report_outlined, color: Palette.muted),
+                  label: const Text('Diagnostics', style: TextStyle(color: Palette.muted, fontSize: 16)),
                 ),
               ),
             ],
