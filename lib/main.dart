@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'screens/book_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/languages_screen.dart';
+import 'services/book_store.dart';
 import 'services/model_manager.dart';
 import 'theme.dart';
 
@@ -14,6 +16,7 @@ Future<void> main() async {
     systemNavigationBarColor: Palette.bg,
   ));
   await ModelManager.instance.init();
+  await BookStore.instance.init();
   runApp(const TravelTranslatorApp());
 }
 
@@ -43,7 +46,7 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = const [HomeScreen(), LanguagesScreen()];
+    final pages = const [HomeScreen(), BookScreen(), LanguagesScreen()];
     return Scaffold(
       body: IndexedStack(index: _tab, children: pages),
       bottomNavigationBar: NavigationBarTheme(
@@ -66,6 +69,7 @@ class _RootShellState extends State<RootShell> {
           onDestinationSelected: (i) => setState(() => _tab = i),
           destinations: const [
             NavigationDestination(icon: Icon(Icons.record_voice_over_rounded), label: 'Talk'),
+            NavigationDestination(icon: Icon(Icons.menu_book_rounded), label: 'Book'),
             NavigationDestination(icon: Icon(Icons.language_rounded), label: 'Languages'),
           ],
         ),

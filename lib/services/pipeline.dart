@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/language.dart';
+import 'book_store.dart';
 import 'lang_guess.dart';
 import 'listener.dart';
 import 'model_manager.dart';
@@ -183,6 +184,14 @@ class Pipeline extends ChangeNotifier {
       );
     }
     history.add(last!);
+    BookStore.instance.addHistory(Entry(
+      time: DateTime.now().millisecondsSinceEpoch,
+      fromThem: last!.fromThem,
+      original: last!.original,
+      translated: last!.translated,
+      speakLocale: last!.speakLocale,
+      langCode: other.code,
+    ));
     _listener.muted = false;
     turn = Turn.listening;
     status = 'Listening';
