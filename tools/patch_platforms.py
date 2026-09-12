@@ -59,7 +59,7 @@ subprojects {
     afterEvaluate {
         val android = extensions.findByName("android") ?: return@afterEvaluate
         val current = android.withGroovyBuilder { getProperty("compileSdkVersion") }?.toString() ?: ""
-        val level = Regex("android-(\\d+)").find(current)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val level = Regex("android-([0-9]+)").find(current)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         if (level in 1..34) {
             android.withGroovyBuilder { "compileSdkVersion"(35) }
         }
@@ -77,7 +77,7 @@ subprojects {
     afterEvaluate { project ->
         if (project.hasProperty("android")) {
             def current = project.android.compileSdkVersion?.toString() ?: ""
-            def m = (current =~ /android-(\\d+)/)
+            def m = (current =~ /android-([0-9]+)/)
             def level = m.find() ? m.group(1).toInteger() : 0
             if (level > 0 && level < 35) {
                 project.android.compileSdkVersion 35
