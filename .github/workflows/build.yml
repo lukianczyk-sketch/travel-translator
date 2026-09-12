@@ -28,6 +28,21 @@ jobs:
       - name: Generate platform folders
         run: flutter create . --org com.rlforgeworks --project-name travel_translator --platforms android,ios
 
+      - name: Ensure a permanent signing key exists (created once, then committed)
+        shell: bash
+        run: |
+          if [ ! -f signing/release.jks ]; then
+            mkdir -p signing
+            keytool -genkeypair -v -keystore signing/release.jks -storepass traveltranslator -keypass traveltranslator \
+              -alias travel -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Travel Translator, O=RL Forge Works, L=Tehachapi, S=CA, C=US"
+            git config user.name "build-bot"
+            git config user.email "build-bot@users.noreply.github.com"
+            git add -f signing/release.jks
+            git commit -qm "Add permanent release signing key [skip ci]"
+            for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin HEAD:main && break || sleep 5; done
+          fi
+
       - name: Patch permissions + app name
         run: python3 tools/patch_platforms.py
 

@@ -90,4 +90,40 @@ subprojects { project ->
 """
         root_groovy.write_text(t)
 
+# Stable release signing so updates install over the previous version.
+ks = pathlib.Path("signing/release.jks")
+app_kts = pathlib.Path("android/app/build.gradle.kts")
+app_groovy = pathlib.Path("android/app/build.gradle")
+if ks.exists():
+    if app_kts.exists():
+        t = app_kts.read_text()
+        if 'getByName("release")' not in t:
+            t = t.replace("android {", """android {
+    signingConfigs {
+        create("release") {
+            storeFile = file("../../signing/release.jks")
+            storePassword = "traveltranslator"
+            keyAlias = "travel"
+            keyPassword = "traveltranslator"
+        }
+    }""", 1)
+            t = t.replace('signingConfig = signingConfigs.getByName("debug")',
+                          'signingConfig = signingConfigs.getByName("release")')
+            app_kts.write_text(t)
+    elif app_groovy.exists():
+        t = app_groovy.read_text()
+        if "signingConfigs.release" not in t:
+            t = t.replace("android {", """android {
+    signingConfigs {
+        release {
+            storeFile file("../../signing/release.jks")
+            storePassword "traveltranslator"
+            keyAlias "travel"
+            keyPassword "traveltranslator"
+        }
+    }""", 1)
+            t = t.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
+            app_groovy.write_text(t)
+    print("Release signing configured.")
+
 print("Platforms patched.")
