@@ -36,4 +36,13 @@ if "NSMicrophoneUsageDescription" not in p:
 p = re.sub(r"<key>CFBundleDisplayName</key>\s*<string>[^<]*</string>",
            f"<key>CFBundleDisplayName</key>\n\t<string>{APP_NAME}</string>", p)
 plist.write_text(p)
+# minSdk 24: needed by the whisper/onnx native libraries.
+for name in ("android/app/build.gradle.kts", "android/app/build.gradle"):
+    g = pathlib.Path(name)
+    if g.exists():
+        t = g.read_text()
+        t = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 24", t)
+        t = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 24", t)
+        g.write_text(t)
+
 print("Platforms patched.")

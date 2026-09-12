@@ -26,9 +26,10 @@ class LanguagesScreen extends StatelessWidget {
               const SizedBox(height: 26),
               const _SectionLabel('ENGINES (download once)'),
               const SizedBox(height: 10),
-              _EngineCard(pack: whisperPack, status: mm.engine(whisperPack.id)),
-              const SizedBox(height: 12),
-              _EngineCard(pack: nllbPack, status: mm.engine(nllbPack.id), comingSoon: true),
+              for (final p in allPacks) ...[
+                _EngineCard(pack: p, status: mm.pack(p.id)),
+                const SizedBox(height: 12),
+              ],
               const SizedBox(height: 28),
               const _SectionLabel('YOUR LANGUAGES'),
               const SizedBox(height: 10),
@@ -64,8 +65,7 @@ class _SectionLabel extends StatelessWidget {
 class _EngineCard extends StatelessWidget {
   final EnginePack pack;
   final PackStatus status;
-  final bool comingSoon;
-  const _EngineCard({required this.pack, required this.status, this.comingSoon = false});
+  const _EngineCard({required this.pack, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +86,7 @@ class _EngineCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                pack.id == 'whisper' ? Icons.hearing_rounded : Icons.psychology_rounded,
+                switch (pack.id) { 'whisper' => Icons.hearing_rounded, 'vad' => Icons.bolt_rounded, _ => Icons.psychology_rounded },
                 color: installed ? Palette.ok : Palette.gold,
                 size: 30,
               ),
@@ -104,15 +104,13 @@ class _EngineCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          if (comingSoon)
-            const _Pill('ARRIVES IN NEXT BUILD', Palette.gold)
-          else if (installed)
+          if (installed)
             Row(
               children: [
                 const _Pill('READY', Palette.ok),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => mm.deleteEngine(pack),
+                  onPressed: () => mm.delete(pack),
                   child: const Text('Delete', style: TextStyle(color: Palette.muted, fontSize: 15)),
                 ),
               ],
@@ -138,7 +136,7 @@ class _EngineCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                     const Spacer(),
                     TextButton(
-                      onPressed: () => mm.cancelEngine(pack.id),
+                      onPressed: () => mm.cancel(pack.id),
                       child: const Text('Cancel', style: TextStyle(color: Palette.them, fontSize: 15)),
                     ),
                   ],
@@ -163,7 +161,7 @@ class _EngineCard extends StatelessWidget {
                       foregroundColor: Palette.bg,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: () => mm.downloadEngine(pack),
+                    onPressed: () => mm.download(pack),
                     icon: const Icon(Icons.download_rounded, size: 26),
                     label: const Text('Download on wifi',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),

@@ -11,7 +11,7 @@ enum PackState { notInstalled, downloading, installed, failed }
 
 class PackStatus {
   PackState state;
-  double progress; // 0..1
+  double progress; // 0..1 across all files of the pack
   String? error;
   PackStatus({this.state = PackState.notInstalled, this.progress = 0, this.error});
 }
@@ -22,40 +22,46 @@ class ModelManager extends ChangeNotifier {
   static final ModelManager instance = ModelManager._();
 
   final Dio _dio = Dio();
-  final Map<String, PackStatus> _engines = {
-    whisperPack.id: PackStatus(),
-    nllbPack.id: PackStatus(),
-  };
+  final Map<String, PackStatus> _packs = {for (final p in allPacks) p.id: PackStatus()};
   final Set<String> _installedLanguages = {};
   final Map<String, CancelToken> _cancels = {};
   Directory? _dir;
 
-  PackStatus engine(String id) => _engines[id]!;
-  bool get whisperReady => engine(whisperPack.id).state == PackState.installed;
+  PackStatus pack(String id) => _packs[id]!;
+  bool isInstalled(String id) => pack(id).state == PackState.installed;
+  bool get allEnginesReady => allPacks.every((p) => isInstalled(p.id));
   bool isLanguageInstalled(String code) => _installedLanguages.contains(code);
   List<Language> get installedLanguages =>
       travelLanguages.where((l) => _installedLanguages.contains(l.code)).toList();
+
+  String get modelsPath => _dir?.path ?? '';
+  String filePath(String fileName) => '${_dir!.path}/$fileName';
 
   Future<void> init() async {
     final base = await getApplicationSupportDirectory();
     _dir = Directory('${base.path}/models');
     if (!await _dir!.exists()) await _dir!.create(recursive: true);
 
-    final whisperFile = File('${_dir!.path}/${whisperPack.fileName}');
-    if (await whisperFile.exists() &&
-        await whisperFile.length() > whisperPack.sizeMb * 1024 * 1024 * 0.95) {
-      _engines[whisperPack.id]!.state = PackState.installed;
+    for (final p in allPacks) {
+      if (await _packComplete(p)) _packs[p.id]!.state = PackState.installed;
     }
     final prefs = await SharedPreferences.getInstance();
     _installedLanguages.addAll(prefs.getStringList('langs') ?? const []);
     notifyListeners();
   }
 
-  String get modelsPath => _dir?.path ?? '';
+  Future<bool> _packComplete(EnginePack p) async {
+    for (final f in p.files) {
+      final file = File(filePath(f.fileName));
+      if (!await file.exists()) return false;
+      // Guard against half-written files (sizes are approximate, allow 10%).
+      if (await file.length() < f.sizeMb * 1024 * 1024 * 0.9) return false;
+    }
+    return true;
+  }
 
-  Future<void> downloadEngine(EnginePack pack) async {
-    if (pack.url.isEmpty) return; // NLLB arrives in drop 2
-    final status = _engines[pack.id]!;
+  Future<void> download(EnginePack p) async {
+    final status = _packs[p.id]!;
     if (status.state == PackState.downloading) return;
     status
       ..state = PackState.downloading
@@ -63,24 +69,33 @@ class ModelManager extends ChangeNotifier {
       ..error = null;
     notifyListeners();
 
-    final target = '${_dir!.path}/${pack.fileName}';
-    final tmp = '$target.part';
     final cancel = CancelToken();
-    _cancels[pack.id] = cancel;
+    _cancels[p.id] = cancel;
+    final total = p.sizeMb.toDouble();
+    var doneMb = 0.0;
     try {
-      await _dio.download(
-        pack.url,
-        tmp,
-        cancelToken: cancel,
-        options: Options(receiveTimeout: const Duration(hours: 2)),
-        onReceiveProgress: (got, total) {
-          if (total > 0) {
-            status.progress = got / total;
+      for (final f in p.files) {
+        final target = filePath(f.fileName);
+        if (await File(target).exists() &&
+            await File(target).length() >= f.sizeMb * 1024 * 1024 * 0.9) {
+          doneMb += f.sizeMb;
+          continue;
+        }
+        final tmp = '$target.part';
+        await _dio.download(
+          f.url,
+          tmp,
+          cancelToken: cancel,
+          options: Options(receiveTimeout: const Duration(hours: 3)),
+          onReceiveProgress: (got, len) {
+            final fileMb = len > 0 ? got / len * f.sizeMb : 0.0;
+            status.progress = ((doneMb + fileMb) / total).clamp(0, 1);
             notifyListeners();
-          }
-        },
-      );
-      await File(tmp).rename(target);
+          },
+        );
+        await File(tmp).rename(target);
+        doneMb += f.sizeMb;
+      }
       status
         ..state = PackState.installed
         ..progress = 1;
@@ -88,29 +103,27 @@ class ModelManager extends ChangeNotifier {
       status
         ..state = PackState.notInstalled
         ..error = CancelToken.isCancel(e) ? null : 'Download failed. Check wifi and retry.';
-      final f = File(tmp);
-      if (await f.exists()) await f.delete();
     } catch (_) {
       status
         ..state = PackState.failed
         ..error = 'Something went wrong. Retry.';
     } finally {
-      _cancels.remove(pack.id);
+      _cancels.remove(p.id);
       notifyListeners();
     }
   }
 
-  void cancelEngine(String id) => _cancels[id]?.cancel();
+  void cancel(String id) => _cancels[id]?.cancel();
 
-  Future<void> deleteEngine(EnginePack pack) async {
-    final f = File('${_dir!.path}/${pack.fileName}');
-    if (await f.exists()) await f.delete();
-    _engines[pack.id] = PackStatus();
+  Future<void> delete(EnginePack p) async {
+    for (final f in p.files) {
+      final file = File(filePath(f.fileName));
+      if (await file.exists()) await file.delete();
+    }
+    _packs[p.id] = PackStatus();
     notifyListeners();
   }
 
-  /// Language packs are tiny tokenizer/config bundles layered on top of NLLB.
-  /// In drop 1 this just records the choice so the UI + persistence are proven.
   Future<void> setLanguageInstalled(String code, bool installed) async {
     if (installed) {
       _installedLanguages.add(code);

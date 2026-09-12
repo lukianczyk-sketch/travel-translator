@@ -31,8 +31,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _toast('Pick a language first.');
       return;
     }
-    if (!mm.whisperReady) {
-      _toast('Download the Ears pack in Languages first (needs wifi once).');
+    if (!mm.allEnginesReady) {
+      _toast('Download all three engine packs in Languages first (wifi once).');
       return;
     }
     final mic = await Permission.microphone.request();
@@ -78,12 +78,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   style: TextStyle(color: Palette.muted, fontSize: 17, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 22),
-                _ReadyRow(ready: mm.whisperReady),
+                _ReadyRow(ready: mm.allEnginesReady),
                 const Spacer(),
                 Center(
                   child: _TalkButton(
                     pulse: _pulse,
-                    enabled: langs.isNotEmpty && mm.whisperReady,
+                    enabled: langs.isNotEmpty && mm.allEnginesReady,
                     onTap: _start,
                   ),
                 ),
@@ -180,7 +180,7 @@ class _ReadyRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              ready ? 'Ears ready — works with no signal' : 'Ears pack not downloaded yet',
+              ready ? 'All engines ready — works with no signal' : 'Engine packs not downloaded yet',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
