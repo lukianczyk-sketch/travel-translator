@@ -1,18 +1,12 @@
 Running Gradle task 'assembleRelease'...                        
-e: file:///home/runner/work/travel-translator/travel-translator/android/build.gradle.kts:32:37: Unsupported escape sequence.
 
 FAILURE: Build failed with an exception.
 
 * Where:
-Build file '/home/runner/work/travel-translator/travel-translator/android/build.gradle.kts' line: 32
+Build file '/home/runner/work/travel-translator/travel-translator/android/build.gradle.kts' line: 29
 
 * What went wrong:
-Script compilation error:
-
-  Line 32:         val level = Regex("android-(\d+)").find(current)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                                               ^ Unsupported escape sequence.
-
-1 error
+Cannot run Project.afterEvaluate(Action) when the project is already evaluated.
 
 * Try:
 > Run with --stacktrace option to get the stack trace.
@@ -20,6 +14,6 @@ Script compilation error:
 > Run with --scan to get full insights from a Build Scan (powered by Develocity).
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 1m 22s
-Running Gradle task 'assembleRelease'...                           83.4s
+BUILD FAILED in 1m 15s
+Running Gradle task 'assembleRelease'...                           75.5s
 Gradle task assembleRelease failed with exit code 1
