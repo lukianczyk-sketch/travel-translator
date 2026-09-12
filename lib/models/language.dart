@@ -21,20 +21,40 @@ const english = Language(
   nllbCode: 'eng_Latn', ttsLocale: 'en-US',
 );
 
-/// Robert's travel set. Order = display order.
+/// Full catalog. First six are Robert's trip languages; the rest are common
+/// travel languages. All are covered by the one NLLB pack.
 const travelLanguages = <Language>[
-  Language(code: 'pl', name: 'Polish', native: 'Polski', flag: '🇵🇱',
-      nllbCode: 'pol_Latn', ttsLocale: 'pl-PL'),
-  Language(code: 'de', name: 'German', native: 'Deutsch', flag: '🇩🇪',
-      nllbCode: 'deu_Latn', ttsLocale: 'de-DE'),
-  Language(code: 'fr', name: 'French', native: 'Français', flag: '🇫🇷',
-      nllbCode: 'fra_Latn', ttsLocale: 'fr-FR'),
-  Language(code: 'el', name: 'Greek', native: 'Ελληνικά', flag: '🇬🇷',
-      nllbCode: 'ell_Grek', ttsLocale: 'el-GR'),
-  Language(code: 'ja', name: 'Japanese', native: '日本語', flag: '🇯🇵',
-      nllbCode: 'jpn_Jpan', ttsLocale: 'ja-JP'),
-  Language(code: 'ga', name: 'Irish', native: 'Gaeilge', flag: '🇮🇪',
-      nllbCode: 'gle_Latn', ttsLocale: 'ga-IE'),
+  Language(code: 'pl', name: 'Polish', native: 'Polski', flag: '🇵🇱', nllbCode: 'pol_Latn', ttsLocale: 'pl-PL'),
+  Language(code: 'de', name: 'German', native: 'Deutsch', flag: '🇩🇪', nllbCode: 'deu_Latn', ttsLocale: 'de-DE'),
+  Language(code: 'fr', name: 'French', native: 'Français', flag: '🇫🇷', nllbCode: 'fra_Latn', ttsLocale: 'fr-FR'),
+  Language(code: 'el', name: 'Greek', native: 'Ελληνικά', flag: '🇬🇷', nllbCode: 'ell_Grek', ttsLocale: 'el-GR'),
+  Language(code: 'ja', name: 'Japanese', native: '日本語', flag: '🇯🇵', nllbCode: 'jpn_Jpan', ttsLocale: 'ja-JP'),
+  Language(code: 'ga', name: 'Irish', native: 'Gaeilge', flag: '🇮🇪', nllbCode: 'gle_Latn', ttsLocale: 'ga-IE'),
+  Language(code: 'es', name: 'Spanish', native: 'Español', flag: '🇪🇸', nllbCode: 'spa_Latn', ttsLocale: 'es-ES'),
+  Language(code: 'it', name: 'Italian', native: 'Italiano', flag: '🇮🇹', nllbCode: 'ita_Latn', ttsLocale: 'it-IT'),
+  Language(code: 'pt', name: 'Portuguese', native: 'Português', flag: '🇵🇹', nllbCode: 'por_Latn', ttsLocale: 'pt-PT'),
+  Language(code: 'nl', name: 'Dutch', native: 'Nederlands', flag: '🇳🇱', nllbCode: 'nld_Latn', ttsLocale: 'nl-NL'),
+  Language(code: 'cs', name: 'Czech', native: 'Čeština', flag: '🇨🇿', nllbCode: 'ces_Latn', ttsLocale: 'cs-CZ'),
+  Language(code: 'sk', name: 'Slovak', native: 'Slovenčina', flag: '🇸🇰', nllbCode: 'slk_Latn', ttsLocale: 'sk-SK'),
+  Language(code: 'hu', name: 'Hungarian', native: 'Magyar', flag: '🇭🇺', nllbCode: 'hun_Latn', ttsLocale: 'hu-HU'),
+  Language(code: 'ro', name: 'Romanian', native: 'Română', flag: '🇷🇴', nllbCode: 'ron_Latn', ttsLocale: 'ro-RO'),
+  Language(code: 'hr', name: 'Croatian', native: 'Hrvatski', flag: '🇭🇷', nllbCode: 'hrv_Latn', ttsLocale: 'hr-HR'),
+  Language(code: 'sv', name: 'Swedish', native: 'Svenska', flag: '🇸🇪', nllbCode: 'swe_Latn', ttsLocale: 'sv-SE'),
+  Language(code: 'no', name: 'Norwegian', native: 'Norsk', flag: '🇳🇴', nllbCode: 'nob_Latn', ttsLocale: 'nb-NO'),
+  Language(code: 'da', name: 'Danish', native: 'Dansk', flag: '🇩🇰', nllbCode: 'dan_Latn', ttsLocale: 'da-DK'),
+  Language(code: 'fi', name: 'Finnish', native: 'Suomi', flag: '🇫🇮', nllbCode: 'fin_Latn', ttsLocale: 'fi-FI'),
+  Language(code: 'tr', name: 'Turkish', native: 'Türkçe', flag: '🇹🇷', nllbCode: 'tur_Latn', ttsLocale: 'tr-TR'),
+  Language(code: 'ru', name: 'Russian', native: 'Русский', flag: '🇷🇺', nllbCode: 'rus_Cyrl', ttsLocale: 'ru-RU'),
+  Language(code: 'uk', name: 'Ukrainian', native: 'Українська', flag: '🇺🇦', nllbCode: 'ukr_Cyrl', ttsLocale: 'uk-UA'),
+  Language(code: 'zh', name: 'Chinese', native: '中文', flag: '🇨🇳', nllbCode: 'zho_Hans', ttsLocale: 'zh-CN'),
+  Language(code: 'ko', name: 'Korean', native: '한국어', flag: '🇰🇷', nllbCode: 'kor_Hang', ttsLocale: 'ko-KR'),
+  Language(code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt', flag: '🇻🇳', nllbCode: 'vie_Latn', ttsLocale: 'vi-VN'),
+  Language(code: 'th', name: 'Thai', native: 'ไทย', flag: '🇹🇭', nllbCode: 'tha_Thai', ttsLocale: 'th-TH'),
+  Language(code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia', flag: '🇮🇩', nllbCode: 'ind_Latn', ttsLocale: 'id-ID'),
+  Language(code: 'tl', name: 'Filipino', native: 'Tagalog', flag: '🇵🇭', nllbCode: 'tgl_Latn', ttsLocale: 'fil-PH'),
+  Language(code: 'hi', name: 'Hindi', native: 'हिन्दी', flag: '🇮🇳', nllbCode: 'hin_Deva', ttsLocale: 'hi-IN'),
+  Language(code: 'ar', name: 'Arabic', native: 'العربية', flag: '🇸🇦', nllbCode: 'arb_Arab', ttsLocale: 'ar-SA'),
+  Language(code: 'he', name: 'Hebrew', native: 'עברית', flag: '🇮🇱', nllbCode: 'heb_Hebr', ttsLocale: 'he-IL'),
 ];
 
 Language? languageByCode(String code) {
