@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   android:
     name: Android APK
@@ -32,12 +35,22 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - run: flutter pub get
-      - run: flutter build apk --release --split-per-abi --target-platform android-arm64
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build apk --release --split-per-abi --target-platform android-arm64 2>&1 | tee build.log
 
       - uses: actions/upload-artifact@v4
         with:
           name: TravelTranslator-Android-APK
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Publish build log to repo (on failure)
+        if: failure()
+        shell: bash
+        run: bash tools/publish_log.sh android
 
   ios:
     name: iPhone IPA (unsigned, for Sideloadly)
@@ -57,7 +70,12 @@ jobs:
         run: python3 tools/patch_platforms.py
 
       - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
+
+      - name: Build iOS (unsigned)
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build ios --release --no-codesign 2>&1 | tee build.log
 
       - name: Package IPA
         run: |
@@ -69,3 +87,8 @@ jobs:
         with:
           name: TravelTranslator-iPhone-IPA
           path: TravelTranslator.ipa
+
+      - name: Publish build log to repo (on failure)
+        if: failure()
+        shell: bash
+        run: bash tools/publish_log.sh ios
