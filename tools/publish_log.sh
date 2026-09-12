@@ -13,7 +13,7 @@ git config user.name "build-bot"
 git config user.email "build-bot@users.noreply.github.com"
 for attempt in 1 2 3 4 5; do
   git fetch -q origin main
-  git reset -q --soft origin/main || true
+  git reset -q --mixed origin/main || true
   git add -f "buildlogs/${PLATFORM}.log"
   git commit -qm "build log: ${PLATFORM} [skip ci]" || true
   if git push -q origin HEAD:main; then

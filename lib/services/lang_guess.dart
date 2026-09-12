@@ -15,7 +15,7 @@ class LangGuess {
     'pl': {'nie', 'jest', 'się', 'to', 'na', 'co', 'jak', 'tak', 'czy', 'do', 'ja', 'ty', 'gdzie',
       'dzień', 'dobry', 'proszę', 'dziękuję', 'ile', 'mam', 'chcę', 'jestem', 'bardzo', 'dobrze'},
     'de': {'der', 'die', 'das', 'und', 'ist', 'nicht', 'ich', 'sie', 'wir', 'ein', 'eine', 'zu',
-      'mit', 'was', 'wie', 'wo', 'bitte', 'danke', 'ja', 'nein', 'haben', 'gut', 'auch', 'ich'},
+      'mit', 'was', 'wie', 'wo', 'bitte', 'danke', 'ja', 'nein', 'haben', 'gut', 'auch', 'kein'},
     'fr': {'le', 'la', 'les', 'et', 'est', 'pas', 'je', 'vous', 'nous', 'un', 'une', 'de', 'des',
       'que', 'qui', 'où', 'merci', 'bonjour', 'oui', 'non', 'avec', 'pour', 'très', 'bien'},
     'ga': {'agus', 'tá', 'níl', 'an', 'na', 'ag', 'mé', 'tú', 'sé', 'sí', 'go', 'raibh', 'maith',
