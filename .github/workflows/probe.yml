@@ -1,0 +1,25 @@
+name: NLLB probe
+on:
+  workflow_dispatch:
+  push:
+    paths: [tools/nllb_probe.py]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy onnxruntime tokenizers
+      - run: python tools/nllb_probe.py
+      - name: Publish result
+        if: always()
+        run: |
+          git config user.name build-bot
+          git config user.email build-bot@users.noreply.github.com
+          git add -f buildlogs/nllb_probe.log || true
+          git commit -qm "nllb probe result [skip ci]" || true
+          git pull -q --rebase origin main && git push -q origin HEAD:main
