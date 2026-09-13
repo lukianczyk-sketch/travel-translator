@@ -201,7 +201,7 @@ class _StatusBar extends StatelessWidget {
       Turn.them => 'THEY\'RE TALKING',
       Turn.you => 'YOU\'RE TALKING',
       Turn.thinking => 'HEARING',
-      Turn.speaking => 'SPEAKING',
+      Turn.speaking => 'SPEAKING — ONE MOMENT',
     };
     final lat = pipe.lastLatency;
     final sub = showLatency && lat != null
