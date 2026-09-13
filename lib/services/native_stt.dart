@@ -70,6 +70,21 @@ class NativeStt {
     }
   }
 
+  /// Play a synthesized file; speaker=true forces the phone speaker even with earbuds.
+  static Future<bool> play(String path, {required bool speaker}) async {
+    try {
+      return await _m.invokeMethod<bool>('play', {'path': path, 'speaker': speaker}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> stopPlay() async {
+    try {
+      await _m.invokeMethod('stopPlay');
+    } catch (_) {}
+  }
+
   static Future<bool> download(String language) async {
     try {
       return await _m.invokeMethod<bool>('download', {'language': language}) ?? false;

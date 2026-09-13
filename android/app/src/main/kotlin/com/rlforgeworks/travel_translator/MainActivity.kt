@@ -1,6 +1,11 @@
 package com.rlforgeworks.travel_translator
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -42,6 +47,7 @@ class MainActivity : FlutterActivity() {
     private var currentLang: String? = null
     private var restartPending = false
     private val translators = HashMap<String, Translator>()
+    private var player: MediaPlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -72,6 +78,8 @@ class MainActivity : FlutterActivity() {
                 "checkSupport" -> checkSupport(call.argument<List<String>>("languages") ?: listOf(), result)
                 "download" -> download(call.argument<String>("language") ?: "en-US", result)
                 "logcat" -> result.success(readLogcat())
+                "play" -> playFile(call.argument<String>("path") ?: "", call.argument<Boolean>("speaker") ?: true, result)
+                "stopPlay" -> { stopPlayback(); result.success(true) }
                 else -> result.notImplemented()
             }
         }
@@ -194,6 +202,58 @@ class MainActivity : FlutterActivity() {
         main.post { try { recognizer?.cancel() } catch (_: Exception) {} }
     }
 
+    // ---------------- audio playback with speaker routing ----------------
+    private fun playFile(path: String, speaker: Boolean, result: MethodChannel.Result) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        try { player?.release() } catch (_: Exception) {}
+        val mp = MediaPlayer()
+        player = mp
+        var done = false
+        fun finish(ok: Boolean) {
+            if (done) return
+            done = true
+            try { mp.release() } catch (_: Exception) {}
+            if (speaker) {
+                try {
+                    if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else @Suppress("DEPRECATION") am.setSpeakerphoneOn(false)
+                    am.mode = AudioManager.MODE_NORMAL
+                } catch (_: Exception) {}
+            }
+            main.post { result.success(ok) }
+        }
+        try {
+            if (speaker) {
+                // Route like a speakerphone call: forces the built-in speaker even with earbuds connected.
+                am.mode = AudioManager.MODE_IN_COMMUNICATION
+                if (Build.VERSION.SDK_INT >= 31) {
+                    val spk = am.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    if (spk != null) am.setCommunicationDevice(spk)
+                } else {
+                    @Suppress("DEPRECATION") am.setSpeakerphoneOn(true)
+                }
+                mp.setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            } else {
+                mp.setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            }
+            mp.setDataSource(path)
+            mp.setOnCompletionListener { finish(true) }
+            mp.setOnErrorListener { _, _, _ -> finish(false); true }
+            mp.setOnPreparedListener { it.start() }
+            mp.prepareAsync()
+        } catch (e: Exception) {
+            finish(false)
+        }
+    }
+
+    private fun stopPlayback() {
+        try { player?.stop(); player?.release() } catch (_: Exception) {}
+        player = null
+    }
+
     private fun stopListening() {
         listening = false
         main.post {
@@ -227,6 +287,7 @@ class MainActivity : FlutterActivity() {
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() { send(mapOf("type" to "speech", "on" to false)) }
         override fun onError(error: Int) {
+            if (!listening) return // we cancelled on purpose (phone is talking)
             // 7 = no match, 6 = speech timeout: just keep listening.
             if (error != 7 && error != 6) send(mapOf("type" to "error", "code" to error, "message" to "recognizer error $error"))
             if (error == 9) { listening = false; return } // insufficient permissions
@@ -242,8 +303,9 @@ class MainActivity : FlutterActivity() {
                 val lang = results.getString(SpeechRecognizer.DETECTED_LANGUAGE)
                 val conf = results.getInt(SpeechRecognizer.LANGUAGE_DETECTION_CONFIDENCE_LEVEL, 0)
                 val switched = results.getString(SpeechRecognizer.LANGUAGE_SWITCH_RESULT)
+                val changed = lang != null && lang != currentLang
                 if (lang != null) currentLang = lang
-                send(mapOf("type" to "lang", "lang" to lang, "confidence" to conf, "switch" to switched))
+                if (changed || switched != null) send(mapOf("type" to "lang", "lang" to lang, "confidence" to conf, "switch" to switched))
             }
         }
     }

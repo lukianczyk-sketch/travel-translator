@@ -40,6 +40,9 @@ class Pipeline extends ChangeNotifier {
   String status = 'Starting…';
   bool ready = false;
   bool speakMySide = true;
+
+  /// Your side out the phone speaker (for them) even when earbuds are in.
+  bool speakerForThem = true;
   double level = 0;
   Latency? lastLatency;
   Exchange? last;
@@ -184,7 +187,7 @@ class Pipeline extends ChangeNotifier {
       _speaking = true;
       await NativeStt.pause(); // don't hear ourselves
       try {
-        await _speaker.say(tr, last!.speakLocale);
+        await _speaker.say(tr, last!.speakLocale, forceSpeaker: !fromThem && speakerForThem);
       } catch (e) {
         _log('ERROR tts: $e');
       }
@@ -203,7 +206,7 @@ class Pipeline extends ChangeNotifier {
     if (e == null || e.translated.isEmpty || e.translated == '…') return;
     _speaking = true;
     await NativeStt.pause();
-    await _speaker.say(e.translated, e.speakLocale);
+    await _speaker.say(e.translated, e.speakLocale, forceSpeaker: !e.fromThem && speakerForThem);
     _speaking = false;
     if (!_stopped) await NativeStt.resume();
   }

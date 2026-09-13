@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'native_stt.dart';
 
 /// Phone's built-in voices. Plays to whatever the phone is routed to
 /// (earbuds if connected, otherwise the speaker).
@@ -52,10 +55,16 @@ class Speaker {
   }
 
   /// Speaks and completes when playback has finished.
-  Future<void> say(String text, String locale) async {
+  /// [forceSpeaker] plays through the phone speaker even with earbuds
+  /// connected (Android) — for the other person to hear.
+  Future<void> say(String text, String locale, {bool forceSpeaker = false}) async {
     if (text.trim().isEmpty) return;
     await init();
     await _tts.setLanguage(locale);
+    if (forceSpeaker && NativeStt.isSupportedPlatform) {
+      final ok = await _sayViaSpeaker(text);
+      if (ok) return;
+    }
     _done = Completer<void>();
     await _tts.speak(text);
     await _done!.future.timeout(
@@ -64,8 +73,22 @@ class Speaker {
     );
   }
 
+  Future<bool> _sayViaSpeaker(String text) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/say_${DateTime.now().millisecondsSinceEpoch % 7}.wav';
+      await _tts.awaitSynthCompletion(true);
+      final r = await _tts.synthesizeToFile(text, path, true);
+      if (r != 1) return false;
+      return await NativeStt.play(path, speaker: true);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> stop() async {
     await _tts.stop();
+    await NativeStt.stopPlay();
     _finish();
   }
 }

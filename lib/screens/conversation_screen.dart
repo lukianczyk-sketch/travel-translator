@@ -83,6 +83,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                   _pipe.replay();
                 },
                 onStop: () => Navigator.of(context).pop(),
+                onSpeaker: () => setState(() => _pipe.speakerForThem = !_pipe.speakerForThem),
               ),
               Expanded(
                 child: _Panel(
@@ -179,7 +180,7 @@ class _StatusBar extends StatelessWidget {
   final Pipeline pipe;
   final Animation<double> wave;
   final bool bigText, showLatency;
-  final VoidCallback onBigText, onLatency, onReplay, onStop;
+  final VoidCallback onBigText, onLatency, onReplay, onStop, onSpeaker;
   const _StatusBar({
     required this.pipe,
     required this.wave,
@@ -189,6 +190,7 @@ class _StatusBar extends StatelessWidget {
     required this.onLatency,
     required this.onReplay,
     required this.onStop,
+    required this.onSpeaker,
   });
 
   @override
@@ -245,9 +247,11 @@ class _StatusBar extends StatelessWidget {
             children: [
               Expanded(child: _BarBtn(icon: Icons.replay_rounded, label: 'Replay', on: false, onTap: onReplay)),
               const SizedBox(width: 8),
-              Expanded(child: _BarBtn(icon: Icons.speed_rounded, label: 'Timing', on: showLatency, onTap: onLatency)),
+              Expanded(child: _BarBtn(icon: Icons.speed_rounded, label: 'Time', on: showLatency, onTap: onLatency)),
               const SizedBox(width: 8),
-              Expanded(child: _BarBtn(icon: Icons.format_size_rounded, label: 'Big text', on: bigText, onTap: onBigText)),
+              Expanded(child: _BarBtn(icon: Icons.format_size_rounded, label: 'Aa', on: bigText, onTap: onBigText)),
+              const SizedBox(width: 8),
+              Expanded(child: _BarBtn(icon: Icons.volume_up_rounded, label: 'Speaker', on: pipe.speakerForThem, onTap: onSpeaker)),
             ],
           ),
         ],
