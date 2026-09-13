@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:record/record.dart';
 
+import 'diag.dart';
+
 /// Listens to the mic at 16 kHz mono and slices it into utterances using
 /// Silero VAD. Tuned for conversation: fires ~350 ms after the speaker pauses.
 class Listener {
@@ -95,8 +97,13 @@ class Listener {
   }
 
   int? _carry; // odd trailing byte from the previous chunk
+  int _chunks = 0;
+  double _peakProb = 0;
+  double _peakLevel = 0;
+  int _framesSinceReport = 0;
 
   void _onAudio(Uint8List bytes) {
+    if (_chunks++ == 0) Diag.instance.log('mic: audio flowing (${bytes.length} bytes/chunk)');
     // Chunks can start at odd offsets and have odd lengths; read byte-wise.
     var data = bytes;
     if (_carry != null) {
@@ -128,6 +135,20 @@ class Listener {
     }
     final p = _predict(frame);
     if (!_level.isClosed) _level.add(p);
+    // Every ~2 s: how loud was the mic and how sure was the voice detector?
+    var peak = 0.0;
+    for (final v in frame) {
+      final a = v.abs();
+      if (a > peak) peak = a;
+    }
+    if (peak > _peakLevel) _peakLevel = peak;
+    if (p > _peakProb) _peakProb = p;
+    if (++_framesSinceReport >= 62) {
+      Diag.instance.log('mic: peak level ${(_peakLevel * 100).toStringAsFixed(0)}%  voice score ${(_peakProb * 100).toStringAsFixed(0)}%${_inSpeech ? '  (in speech)' : ''}');
+      _framesSinceReport = 0;
+      _peakLevel = 0;
+      _peakProb = 0;
+    }
 
     final frameMs = window * 1000 ~/ sampleRate;
     if (!_inSpeech) {

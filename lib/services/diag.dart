@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -13,7 +12,6 @@ class Diag extends ChangeNotifier {
 
   final List<String> lines = [];
   File? _file;
-  IOSink? _sink;
 
   // Tunables surfaced on the Diagnostics screen.
   bool fastWhisper = true;
@@ -26,7 +24,6 @@ class Diag extends ChangeNotifier {
       final old = await _file!.readAsLines();
       lines.addAll(old.length > 400 ? old.sublist(old.length - 400) : old);
     }
-    _sink = _file!.openWrite(mode: FileMode.append);
     final prefs = await SharedPreferences.getInstance();
     fastWhisper = prefs.getBool('fast_whisper') ?? true;
     whisperThreads = prefs.getInt('whisper_threads') ?? 6;
@@ -37,8 +34,9 @@ class Diag extends ChangeNotifier {
     final line = '${_ts()} $msg';
     lines.add(line);
     if (lines.length > 600) lines.removeRange(0, lines.length - 600);
-    _sink?.writeln(line);
-    _sink?.flush();
+    try {
+      _file?.writeAsStringSync('$line\n', mode: FileMode.append, flush: true);
+    } catch (_) {}
     debugPrint(line);
     notifyListeners();
   }
@@ -65,9 +63,7 @@ class Diag extends ChangeNotifier {
 
   Future<void> clear() async {
     lines.clear();
-    await _sink?.close();
     await _file?.writeAsString('');
-    _sink = _file!.openWrite(mode: FileMode.append);
     log('--- log cleared ---');
   }
 
