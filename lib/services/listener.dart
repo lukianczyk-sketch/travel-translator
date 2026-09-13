@@ -12,6 +12,7 @@ import 'diag.dart';
 class Listener {
   static const int sampleRate = 16000;
   static const int window = 512; // Silero v5 frame at 16 kHz (32 ms)
+  static const int context = 64; // Silero v5 wants the previous 64 samples prepended
 
   // Tunables
   final double threshold = 0.5;
@@ -24,6 +25,7 @@ class Listener {
   OrtSession? _vad;
   OrtSessionOptions? _vadOpts;
   List<List<Float32List>> _state = _zeroState();
+  Float32List _context = Float32List(context);
   StreamSubscription<Uint8List>? _sub;
   final _pending = <int>[]; // leftover int16 samples not yet a full window
 
@@ -58,6 +60,7 @@ class Listener {
       ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
     _vad = OrtSession.fromFile(File(vadModelPath), _vadOpts!);
     _state = _zeroState();
+    _context = Float32List(context);
     _reset();
 
     final stream = await _rec.startStream(const RecordConfig(
@@ -197,9 +200,14 @@ class Listener {
   double _predict(Float32List frame) {
     final session = _vad;
     if (session == null) return 0;
-    final input = OrtValueTensor.createTensorWithDataList(frame, [1, window]);
+    // Silero v5: input = [last 64 samples of previous window] + [this window].
+    final withCtx = Float32List(context + window)
+      ..setRange(0, context, _context)
+      ..setRange(context, context + window, frame);
+    _context = Float32List.sublistView(frame, window - context);
+    final input = OrtValueTensor.createTensorWithDataList(withCtx, [1, context + window]);
     final state = OrtValueTensor.createTensorWithDataList(_state, [2, 1, 128]);
-    final sr = OrtValueTensor.createTensorWithData(sampleRate);
+    final sr = OrtValueTensor.createTensorWithDataList(Int64List.fromList([sampleRate]), []);
     final run = OrtRunOptions();
     final outs = session.run(run, {'input': input, 'state': state, 'sr': sr});
     input.release();
