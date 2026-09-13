@@ -50,19 +50,18 @@ class DiagScreen extends StatelessWidget {
                       activeColor: Palette.you,
                       onChanged: d.setFast,
                     ),
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
-                        const Text('Hearing threads', style: TextStyle(fontWeight: FontWeight.w700)),
-                        const Spacer(),
+                        const Text('Hearing threads  ', style: TextStyle(fontWeight: FontWeight.w700)),
                         for (final n in [2, 4, 6, 8])
-                          Padding(
-                            padding: const EdgeInsets.only(left: 6),
-                            child: ChoiceChip(
-                              label: Text('$n'),
-                              selected: d.whisperThreads == n,
-                              selectedColor: Palette.you.withOpacity(0.3),
-                              onSelected: (_) => d.setThreads(n),
-                            ),
+                          ChoiceChip(
+                            label: Text('$n'),
+                            selected: d.whisperThreads == n,
+                            selectedColor: Palette.you.withOpacity(0.3),
+                            onSelected: (_) => d.setThreads(n),
                           ),
                       ],
                     ),

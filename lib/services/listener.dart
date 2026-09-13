@@ -94,9 +94,23 @@ class Listener {
     _pending.clear();
   }
 
+  int? _carry; // odd trailing byte from the previous chunk
+
   void _onAudio(Uint8List bytes) {
-    final int16 = bytes.buffer.asInt16List(bytes.offsetInBytes, bytes.lengthInBytes ~/ 2);
-    _pending.addAll(int16);
+    // Chunks can start at odd offsets and have odd lengths; read byte-wise.
+    var data = bytes;
+    if (_carry != null) {
+      data = Uint8List(bytes.length + 1)
+        ..[0] = _carry!
+        ..setRange(1, bytes.length + 1, bytes);
+      _carry = null;
+    }
+    final even = data.length & ~1;
+    if (even != data.length) _carry = data[data.length - 1];
+    final bd = ByteData.sublistView(data, 0, even);
+    for (var i = 0; i < even; i += 2) {
+      _pending.add(bd.getInt16(i, Endian.little));
+    }
     while (_pending.length >= window) {
       final frame = Float32List(window);
       for (var i = 0; i < window; i++) {
