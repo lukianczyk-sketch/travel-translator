@@ -46,6 +46,7 @@ class MainActivity : FlutterActivity() {
     private var primary: String = "en-US"
     private var currentLang: String? = null
     private var restartPending = false
+    private var busyCount = 0
     private val translators = HashMap<String, Translator>()
     private var player: MediaPlayer? = null
 
@@ -74,7 +75,14 @@ class MainActivity : FlutterActivity() {
                 }
                 "stop" -> { stopListening(); result.success(true) }
                 "pause" -> { pauseListening(); result.success(true) }
-                "resume" -> { if (!listening) startListening(); result.success(true) }
+                "resume" -> {
+                    if (!listening) {
+                        // Make sure the previous session is fully torn down before starting again.
+                        main.post { try { recognizer?.cancel() } catch (_: Exception) {} }
+                        main.postDelayed({ startListening() }, 250)
+                    }
+                    result.success(true)
+                }
                 "checkSupport" -> checkSupport(call.argument<List<String>>("languages") ?: listOf(), result)
                 "download" -> download(call.argument<String>("language") ?: "en-US", result)
                 "logcat" -> result.success(readLogcat())
@@ -293,9 +301,24 @@ class MainActivity : FlutterActivity() {
             // 7 = no match, 6 = speech timeout: just keep listening.
             if (error != 7 && error != 6) send(mapOf("type" to "error", "code" to error, "message" to "recognizer error $error"))
             if (error == 9) { listening = false; return } // insufficient permissions
-            scheduleRestart(if (error == 8) 600 else 150)   // 8 = busy
+            if (error == 8) { // recognizer busy: cancel, and after repeats rebuild it
+                busyCount++
+                main.post { try { recognizer?.cancel() } catch (_: Exception) {} }
+                if (busyCount >= 3) {
+                    busyCount = 0
+                    main.post {
+                        try { recognizer?.destroy() } catch (_: Exception) {}
+                        recognizer = null
+                        ensureRecognizer()
+                    }
+                }
+                scheduleRestart(900)
+                return
+            }
+            busyCount = 0
+            scheduleRestart(150)
         }
-        override fun onResults(results: Bundle?) { emitResults(results, true); scheduleRestart(50) }
+        override fun onResults(results: Bundle?) { busyCount = 0; emitResults(results, true); scheduleRestart(50) }
         override fun onPartialResults(partialResults: Bundle?) { emitResults(partialResults, false) }
         override fun onEvent(eventType: Int, params: Bundle?) {}
         override fun onSegmentResults(segmentResults: Bundle) { emitResults(segmentResults, true) }

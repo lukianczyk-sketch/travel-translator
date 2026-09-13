@@ -109,6 +109,7 @@ class Pipeline extends ChangeNotifier {
           _drain();
         }
       case 'error':
+        if (e.data['code'] == 8) return; // busy; the native side resets itself
         _log('ERROR recognizer: ${e.data['message']}');
         status = 'Ears: ${e.data['message']}';
         notifyListeners();
