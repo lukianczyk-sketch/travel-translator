@@ -46,7 +46,7 @@ class Pipeline extends ChangeNotifier {
 
   /// Who we expect to speak next. Drives the recognizer's primary language:
   /// after you speak, we listen for them; after they speak, we listen for you.
-  bool expectThem = true;
+  bool expectThem = false; // you usually open the conversation
   String get _primaryLocale => expectThem ? other.ttsLocale : english.ttsLocale;
   double level = 0;
   Latency? lastLatency;
