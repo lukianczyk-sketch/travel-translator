@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/diag.dart';
+import '../services/native_stt.dart';
 import '../theme.dart';
 
 class DiagScreen extends StatelessWidget {
@@ -25,6 +26,16 @@ class DiagScreen extends StatelessWidget {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context)
                         .showSnackBar(const SnackBar(content: Text('Log copied — paste it to Claude.')));
+                  }
+                },
+              ),
+              IconButton(
+                tooltip: 'Pull phone system log',
+                icon: const Icon(Icons.phone_android_rounded),
+                onPressed: () async {
+                  final l = await NativeStt.logcat();
+                  for (final line in l.split('\n')) {
+                    if (line.trim().isNotEmpty) Diag.instance.log('android: $line');
                   }
                 },
               ),

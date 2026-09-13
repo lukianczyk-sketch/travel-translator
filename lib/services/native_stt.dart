@@ -62,6 +62,14 @@ class NativeStt {
     }
   }
 
+  static Future<String> logcat() async {
+    try {
+      return await _m.invokeMethod<String>('logcat') ?? '';
+    } catch (e) {
+      return 'logcat unavailable: $e';
+    }
+  }
+
   static Future<bool> download(String language) async {
     try {
       return await _m.invokeMethod<bool>('download', {'language': language}) ?? false;

@@ -1,7 +1,7 @@
 name: travel_translator
 description: Live two-way conversation translator that works offline.
 publish_to: "none"
-version: 0.5.0+14
+version: 0.5.1+15
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -14,7 +14,6 @@ dependencies:
   shared_preferences: ^2.3.2
   permission_handler: ^11.3.1
   flutter_tts: ^4.2.0
-  google_mlkit_translation: ^0.15.1
   wakelock_plus: ^1.2.8
 
 dev_dependencies:

@@ -15,6 +15,15 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.common.model.RemoteModelManager
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.TranslateRemoteModel
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.util.concurrent.Executors
 
 /**
@@ -32,6 +41,7 @@ class MainActivity : FlutterActivity() {
     private var primary: String = "en-US"
     private var currentLang: String? = null
     private var restartPending = false
+    private val translators = HashMap<String, Translator>()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -61,9 +71,75 @@ class MainActivity : FlutterActivity() {
                 "resume" -> { if (!listening) startListening(); result.success(true) }
                 "checkSupport" -> checkSupport(call.argument<List<String>>("languages") ?: listOf(), result)
                 "download" -> download(call.argument<String>("language") ?: "en-US", result)
+                "logcat" -> result.success(readLogcat())
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(messenger, "tt/mt").setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "isDownloaded" -> {
+                        val code = mlLang(call.argument<String>("code") ?: "")
+                        if (code == null) { result.success(false); return@setMethodCallHandler }
+                        RemoteModelManager.getInstance()
+                            .isModelDownloaded(TranslateRemoteModel.Builder(code).build())
+                            .addOnSuccessListener { result.success(it) }
+                            .addOnFailureListener { result.error("mt", it.toString(), null) }
+                    }
+                    "download" -> {
+                        val code = mlLang(call.argument<String>("code") ?: "")
+                        if (code == null) { result.error("mt", "unsupported language", null); return@setMethodCallHandler }
+                        RemoteModelManager.getInstance()
+                            .download(TranslateRemoteModel.Builder(code).build(), DownloadConditions.Builder().build())
+                            .addOnSuccessListener { result.success(true) }
+                            .addOnFailureListener { result.error("mt", it.toString(), null) }
+                    }
+                    "delete" -> {
+                        val code = mlLang(call.argument<String>("code") ?: "")
+                        if (code == null) { result.success(false); return@setMethodCallHandler }
+                        RemoteModelManager.getInstance()
+                            .deleteDownloadedModel(TranslateRemoteModel.Builder(code).build())
+                            .addOnSuccessListener { result.success(true) }
+                            .addOnFailureListener { result.error("mt", it.toString(), null) }
+                    }
+                    "translate" -> {
+                        val src = mlLang(call.argument<String>("src") ?: "")
+                        val tgt = mlLang(call.argument<String>("tgt") ?: "")
+                        val text = call.argument<String>("text") ?: ""
+                        if (src == null || tgt == null) { result.error("mt", "unsupported language", null); return@setMethodCallHandler }
+                        val key = "$src>$tgt"
+                        val t = translators.getOrPut(key) {
+                            Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(src).setTargetLanguage(tgt).build())
+                        }
+                        t.translate(text)
+                            .addOnSuccessListener { result.success(it) }
+                            .addOnFailureListener { result.error("mt", it.toString(), null) }
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Throwable) {
+                result.error("mt", e.toString(), null)
+            }
+        }
+    }
+
+    private fun mlLang(code: String): String? = TranslateLanguage.fromLanguageTag(code)
+
+    private fun readLogcat(): String {
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "400", "-v", "time"))
+            val r = BufferedReader(InputStreamReader(p.inputStream))
+            val sb = StringBuilder()
+            var line = r.readLine()
+            while (line != null) {
+                if (line.contains("flutter", true) || line.contains("mlkit", true) || line.contains("Registrant") ||
+                    line.contains("AndroidRuntime") || line.contains("FATAL") || line.contains("travel_translator") ||
+                    line.contains("SpeechRecognizer", true) || line.contains(" E ")) sb.append(line).append('\n')
+                line = r.readLine()
+            }
+            sb.toString()
+        } catch (e: Exception) { "logcat unavailable: $e" }
     }
 
     private fun send(map: Map<String, Any?>) { main.post { events?.success(map) } }
