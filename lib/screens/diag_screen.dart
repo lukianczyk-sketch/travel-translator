@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/diag.dart';
-import '../services/model_manager.dart';
 import '../theme.dart';
 
 class DiagScreen extends StatelessWidget {
@@ -38,64 +37,6 @@ class DiagScreen extends StatelessWidget {
           ),
           body: Column(
             children: [
-              Container(
-                color: Palette.bg2,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Column(
-                  children: [
-                    AnimatedBuilder(
-                      animation: ModelManager.instance,
-                      builder: (_, __) {
-                        final mm = ModelManager.instance;
-                        return Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            const Text('Ears model  ', style: TextStyle(fontWeight: FontWeight.w700)),
-                            ChoiceChip(
-                              label: const Text('Best (turbo)'),
-                              selected: mm.earsModel == 'turbo',
-                              selectedColor: Palette.you.withOpacity(0.3),
-                              onSelected: (_) => mm.setEarsModel('turbo'),
-                            ),
-                            ChoiceChip(
-                              label: const Text('Fast (small)'),
-                              selected: mm.earsModel == 'small',
-                              selectedColor: Palette.you.withOpacity(0.3),
-                              onSelected: (_) => mm.setEarsModel('small'),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Trim hearing window to 15 s', style: TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: const Text('Slightly faster; can cause repeated words', style: TextStyle(color: Palette.muted)),
-                      value: d.fastWhisper,
-                      activeColor: Palette.you,
-                      onChanged: d.setFast,
-                    ),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        const Text('Hearing threads  ', style: TextStyle(fontWeight: FontWeight.w700)),
-                        for (final n in [2, 4, 6, 8])
-                          ChoiceChip(
-                            label: Text('$n'),
-                            selected: d.whisperThreads == n,
-                            selectedColor: Palette.you.withOpacity(0.3),
-                            onSelected: (_) => d.setThreads(n),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                ),
-              ),
               Expanded(
                 child: SelectionArea(
                   child: ListView.builder(

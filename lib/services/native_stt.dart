@@ -1,0 +1,72 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+
+/// Event from the phone's on-device recognizer.
+class SttEvent {
+  final String type; // partial | final | lang | speech | rms | status | error | download
+  final Map<dynamic, dynamic> data;
+  const SttEvent(this.type, this.data);
+  String? get text => data['text'] as String?;
+  String? get lang => data['lang'] as String?;
+}
+
+/// Streaming speech recognition using the phone's own on-device engine
+/// (Android: Google/Samsung speech services; words arrive as they're spoken).
+class NativeStt {
+  static const _m = MethodChannel('tt/stt');
+  static const _e = EventChannel('tt/stt/events');
+  static Stream<SttEvent>? _stream;
+
+  static bool get isSupportedPlatform => Platform.isAndroid;
+
+  static Stream<SttEvent> get events {
+    _stream ??= _e.receiveBroadcastStream().map((e) {
+      final m = e as Map<dynamic, dynamic>;
+      return SttEvent(m['type'] as String, m);
+    });
+    return _stream!;
+  }
+
+  static Future<bool> available() async {
+    if (!isSupportedPlatform) return false;
+    try {
+      return await _m.invokeMethod<bool>('available') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<int> sdk() async {
+    try {
+      return await _m.invokeMethod<int>('sdk') ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> start(List<String> languages, String primary) =>
+      _m.invokeMethod('start', {'languages': languages, 'primary': primary});
+  static Future<void> pause() => _m.invokeMethod('pause');
+  static Future<void> resume() => _m.invokeMethod('resume');
+  static Future<void> stop() => _m.invokeMethod('stop');
+
+  /// Which speech language packs are installed / downloadable on this phone.
+  static Future<Map<String, dynamic>> checkSupport(List<String> languages) async {
+    try {
+      final r = await _m.invokeMethod<Map<dynamic, dynamic>>('checkSupport', {'languages': languages});
+      return r?.map((k, v) => MapEntry(k.toString(), v)) ?? {'supported': false};
+    } catch (e) {
+      return {'supported': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<bool> download(String language) async {
+    try {
+      return await _m.invokeMethod<bool>('download', {'language': language}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+}

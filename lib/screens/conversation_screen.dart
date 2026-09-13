@@ -52,6 +52,8 @@ class _ConversationScreenState extends State<ConversationScreen>
         final last = _pipe.last;
         final themLast = last != null && last.fromThem ? last : _lastFrom(true);
         final youLast = last != null && !last.fromThem ? last : _lastFrom(false);
+        final liveThem = _pipe.live.isNotEmpty && _pipe.liveFromThem ? _pipe.live : null;
+        final liveYou = _pipe.live.isNotEmpty && !_pipe.liveFromThem ? _pipe.live : null;
         return Scaffold(
           body: Column(
             children: [
@@ -61,9 +63,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                   soft: Palette.themSoft,
                   label: multi ? '${widget.languages.map((l) => l.flag).join(' ')}  THEM  →  ENGLISH' : '${lang.flag}  THEM  →  ENGLISH',
                   active: _pipe.turn == Turn.them || (_pipe.turn == Turn.speaking && (last?.fromThem ?? false)),
-                  original: themLast?.original ?? '',
-                  translated: themLast?.translated ??
-                      (_pipe.ready ? 'Waiting for someone to speak…' : _pipe.status),
+                  original: liveThem ?? themLast?.original ?? '',
+                  translated: liveThem != null
+                      ? '…'
+                      : themLast?.translated ?? (_pipe.ready ? 'Waiting for someone to speak…' : _pipe.status),
                   scale: big,
                   top: true,
                 ),
@@ -87,8 +90,8 @@ class _ConversationScreenState extends State<ConversationScreen>
                   soft: Palette.youSoft,
                   label: '🇺🇸  YOU  →  ${lang.name.toUpperCase()}',
                   active: _pipe.turn == Turn.you || (_pipe.turn == Turn.speaking && !(last?.fromThem ?? true)),
-                  original: youLast?.original ?? '',
-                  translated: youLast?.translated ?? 'Your words will appear here in ${lang.name}.',
+                  original: liveYou ?? youLast?.original ?? '',
+                  translated: liveYou != null ? '…' : youLast?.translated ?? 'Your words will appear here in ${lang.name}.',
                   scale: big,
                   top: false,
                 ),
@@ -200,7 +203,7 @@ class _StatusBar extends StatelessWidget {
     };
     final lat = pipe.lastLatency;
     final sub = showLatency && lat != null
-        ? 'hear ${_s(lat.hearMs)} · translate ${_s(lat.translateMs)} · total ${_s(lat.totalMs)}'
+        ? 'translate ${_s(lat.translateMs)} · to voice ${_s(lat.totalMs)}'
         : pipe.status;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),

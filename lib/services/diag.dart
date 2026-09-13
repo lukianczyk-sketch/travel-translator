@@ -13,9 +13,6 @@ class Diag extends ChangeNotifier {
   final List<String> lines = [];
   File? _file;
 
-  // Tunables surfaced on the Diagnostics screen.
-  bool fastWhisper = false;
-  int whisperThreads = 6;
 
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
@@ -25,8 +22,6 @@ class Diag extends ChangeNotifier {
       lines.addAll(old.length > 400 ? old.sublist(old.length - 400) : old);
     }
     final prefs = await SharedPreferences.getInstance();
-    fastWhisper = prefs.getBool('fast_whisper') ?? false;
-    whisperThreads = prefs.getInt('whisper_threads') ?? 6;
     log('--- app start ${DateTime.now()} ---');
   }
 
@@ -49,20 +44,6 @@ class Diag extends ChangeNotifier {
     final n = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
     return '${two(n.hour)}:${two(n.minute)}:${two(n.second)}.${(n.millisecond ~/ 10).toString().padLeft(2, '0')}';
-  }
-
-  Future<void> setFast(bool v) async {
-    fastWhisper = v;
-    (await SharedPreferences.getInstance()).setBool('fast_whisper', v);
-    log('setting: fast whisper = $v');
-    notifyListeners();
-  }
-
-  Future<void> setThreads(int v) async {
-    whisperThreads = v;
-    (await SharedPreferences.getInstance()).setInt('whisper_threads', v);
-    log('setting: whisper threads = $v');
-    notifyListeners();
   }
 
   Future<void> clear() async {

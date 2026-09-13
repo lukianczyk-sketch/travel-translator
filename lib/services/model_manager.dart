@@ -1,150 +1,169 @@
-import 'dart:io';
+import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/language.dart';
+import 'diag.dart';
+import 'mlkit_translate.dart';
+import 'native_stt.dart';
 
-enum PackState { notInstalled, downloading, installed, failed }
+enum LangState { missing, downloading, ready }
 
-class PackStatus {
-  PackState state;
-  double progress; // 0..1 across all files of the pack
+class LangStatus {
+  bool ears = false; // speech pack on the phone
+  bool brain = false; // ML Kit translation model on the phone
+  bool downloading = false;
+  int earsPercent = 0;
   String? error;
-  PackStatus({this.state = PackState.notInstalled, this.progress = 0, this.error});
+  LangState get state => downloading
+      ? LangState.downloading
+      : (ears && brain ? LangState.ready : LangState.missing);
 }
 
-/// Single source of truth for what's on the phone.
+/// What's installed on the phone, per language. Both engines are the phone's
+/// own (Google speech packs + ML Kit translation models), all free + offline.
 class ModelManager extends ChangeNotifier {
   ModelManager._();
   static final ModelManager instance = ModelManager._();
 
-  final Dio _dio = Dio();
-  final Map<String, PackStatus> _packs = {for (final p in allPacks) p.id: PackStatus()};
-  final Set<String> _installedLanguages = {};
-  final Map<String, CancelToken> _cancels = {};
-  Directory? _dir;
+  final MlkitTranslate mlkit = MlkitTranslate();
+  final Map<String, LangStatus> _status = {for (final l in travelLanguages) l.code: LangStatus()};
+  final Set<String> _chosen = {};
+  bool englishBrain = false;
+  bool englishEars = false;
+  bool speechAvailable = false;
+  bool canCheckEars = false; // Android 13+ can list installed speech packs
+  int sdk = 0;
+  StreamSubscription? _evSub;
 
-  PackStatus pack(String id) => _packs[id]!;
-  bool isInstalled(String id) => pack(id).state == PackState.installed;
-  /// Which Ears model to use: 'turbo' (best) or 'small' (fast).
-  String earsModel = 'turbo';
-  String get earsPackId => earsModel == 'small' ? whisperSmallPack.id : whisperPack.id;
-  String get earsFileName => earsModel == 'small' ? whisperSmallPack.files.first.fileName : whisperPack.files.first.fileName;
-  bool get allEnginesReady =>
-      isInstalled(earsPackId) && isInstalled(nllbPack.id) && isInstalled(vadPack.id);
-  Future<void> setEarsModel(String m) async {
-    earsModel = m;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ears_model', m);
-    notifyListeners();
-  }
-  bool isLanguageInstalled(String code) => _installedLanguages.contains(code);
-  List<Language> get installedLanguages =>
-      travelLanguages.where((l) => _installedLanguages.contains(l.code)).toList();
-
-  String get modelsPath => _dir?.path ?? '';
-  String filePath(String fileName) => '${_dir!.path}/$fileName';
+  LangStatus status(String code) => _status[code]!;
+  bool isChosen(String code) => _chosen.contains(code);
+  List<Language> get chosenLanguages => travelLanguages.where((l) => _chosen.contains(l.code)).toList();
+  List<Language> get readyLanguages =>
+      chosenLanguages.where((l) => status(l.code).state == LangState.ready).toList();
+  bool get anyReady => readyLanguages.isNotEmpty && englishBrain;
 
   Future<void> init() async {
-    final base = await getApplicationSupportDirectory();
-    _dir = Directory('${base.path}/models');
-    if (!await _dir!.exists()) await _dir!.create(recursive: true);
+    final prefs = await SharedPreferences.getInstance();
+    _chosen.addAll(prefs.getStringList('langs') ?? const []);
+    speechAvailable = await NativeStt.available();
+    sdk = await NativeStt.sdk();
+    canCheckEars = speechAvailable && sdk >= 33;
+    Diag.instance.log('speech: available=$speechAvailable sdk=$sdk');
+    if (NativeStt.isSupportedPlatform) {
+      _evSub ??= NativeStt.events.listen(_onEvent);
+    }
+    await refresh();
+  }
 
-    for (final p in allPacks) {
-      if (await _packComplete(p)) _packs[p.id]!.state = PackState.installed;
+  /// Re-check what's on the phone.
+  Future<void> refresh() async {
+    try {
+      englishBrain = await mlkit.isDownloaded('en');
+      for (final l in travelLanguages) {
+        _status[l.code]!.brain = await mlkit.isDownloaded(l.code);
+      }
+    } catch (e) {
+      Diag.instance.log('ERROR mlkit check: $e');
+    }
+    if (canCheckEars) {
+      final r = await NativeStt.checkSupport([...travelLanguages.map((l) => l.ttsLocale), 'en-US']);
+      final installed = ((r['installed'] as List?) ?? const []).map((e) => e.toString().toLowerCase()).toList();
+      final online = ((r['online'] as List?) ?? const []).map((e) => e.toString().toLowerCase()).toList();
+      Diag.instance.log('speech packs installed: $installed');
+      bool has(String locale) {
+        final lc = locale.toLowerCase();
+        final short = lc.split('-').first;
+        return installed.any((i) => i == lc || i.split('-').first == short);
+      }
+      englishEars = has('en-US') || installed.isEmpty && online.isNotEmpty;
+      for (final l in travelLanguages) {
+        _status[l.code]!.ears = has(l.ttsLocale);
+      }
+    } else {
+      // Can't inspect; assume the recognizer will fetch what it needs.
+      englishEars = true;
+      for (final l in travelLanguages) {
+        _status[l.code]!.ears = true;
+      }
+    }
+    notifyListeners();
+  }
+
+  void _onEvent(SttEvent e) {
+    if (e.type != 'download') return;
+    final locale = (e.data['lang'] as String?) ?? '';
+    final code = locale.split('-').first.toLowerCase();
+    final s = _status[code];
+    if (s == null) return;
+    if (e.data['percent'] != null) s.earsPercent = (e.data['percent'] as num).toInt();
+    if (e.data['done'] == true) {
+      s.ears = true;
+      s.downloading = false;
+      Diag.instance.log('speech pack ready: $locale');
+    }
+    if (e.data['error'] != null) {
+      s.error = 'Speech pack download failed (${e.data['error']})';
+      s.downloading = false;
+    }
+    notifyListeners();
+  }
+
+  Future<void> setChosen(String code, bool chosen) async {
+    if (chosen) {
+      _chosen.add(code);
+    } else {
+      _chosen.remove(code);
     }
     final prefs = await SharedPreferences.getInstance();
-    _installedLanguages.addAll(prefs.getStringList('langs') ?? const []);
-    earsModel = prefs.getString('ears_model') ?? 'turbo';
+    await prefs.setStringList('langs', _chosen.toList());
     notifyListeners();
   }
 
-  Future<bool> _packComplete(EnginePack p) async {
-    for (final f in p.files) {
-      final file = File(filePath(f.fileName));
-      if (!await file.exists()) return false;
-      // Guard against half-written files. Sizes are approximate (and small
-      // files round badly), so only reject if it's clearly incomplete.
-      if (await file.length() < f.sizeMb * 1000 * 1000 * 0.6) return false;
-    }
-    return true;
-  }
-
-  Future<void> download(EnginePack p) async {
-    final status = _packs[p.id]!;
-    if (status.state == PackState.downloading) return;
-    status
-      ..state = PackState.downloading
-      ..progress = 0
-      ..error = null;
+  /// Download both engines for a language (and English's brain model once).
+  Future<void> download(Language l) async {
+    final s = _status[l.code]!;
+    if (s.downloading) return;
+    s
+      ..downloading = true
+      ..error = null
+      ..earsPercent = 0;
     notifyListeners();
-
-    final cancel = CancelToken();
-    _cancels[p.id] = cancel;
-    final total = p.sizeMb.toDouble();
-    var doneMb = 0.0;
     try {
-      for (final f in p.files) {
-        final target = filePath(f.fileName);
-        if (await File(target).exists() &&
-            await File(target).length() >= f.sizeMb * 1000 * 1000 * 0.6) {
-          doneMb += f.sizeMb;
-          continue;
-        }
-        final tmp = '$target.part';
-        await _dio.download(
-          f.url,
-          tmp,
-          cancelToken: cancel,
-          options: Options(receiveTimeout: const Duration(hours: 3)),
-          onReceiveProgress: (got, len) {
-            final fileMb = len > 0 ? got / len * f.sizeMb : 0.0;
-            status.progress = ((doneMb + fileMb) / total).clamp(0, 1);
-            notifyListeners();
-          },
-        );
-        await File(tmp).rename(target);
-        doneMb += f.sizeMb;
+      if (!englishBrain) {
+        Diag.instance.log('mlkit: downloading en');
+        englishBrain = await mlkit.download('en');
       }
-      status
-        ..state = PackState.installed
-        ..progress = 1;
-    } on DioException catch (e) {
-      status
-        ..state = PackState.notInstalled
-        ..error = CancelToken.isCancel(e) ? null : 'Download failed. Check wifi and retry.';
-    } catch (_) {
-      status
-        ..state = PackState.failed
-        ..error = 'Something went wrong. Retry.';
+      if (!s.brain) {
+        Diag.instance.log('mlkit: downloading ${l.code}');
+        s.brain = await mlkit.download(l.code);
+      }
+      if (!s.ears && canCheckEars) {
+        Diag.instance.log('speech: requesting pack ${l.ttsLocale}');
+        await NativeStt.download(l.ttsLocale);
+        if (!englishEars) await NativeStt.download('en-US');
+        // Give the system a moment, then re-check (older phones give no callback).
+        await Future.delayed(const Duration(seconds: 8));
+        await refresh();
+        if (!s.ears) {
+          s.error = 'Speech pack is downloading in the background — check back in a minute.';
+        }
+      }
+    } catch (e) {
+      s.error = 'Download failed: $e';
+      Diag.instance.log('ERROR download ${l.code}: $e');
     } finally {
-      _cancels.remove(p.id);
+      s.downloading = false;
       notifyListeners();
     }
   }
 
-  void cancel(String id) => _cancels[id]?.cancel();
-
-  Future<void> delete(EnginePack p) async {
-    for (final f in p.files) {
-      final file = File(filePath(f.fileName));
-      if (await file.exists()) await file.delete();
-    }
-    _packs[p.id] = PackStatus();
-    notifyListeners();
-  }
-
-  Future<void> setLanguageInstalled(String code, bool installed) async {
-    if (installed) {
-      _installedLanguages.add(code);
-    } else {
-      _installedLanguages.remove(code);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('langs', _installedLanguages.toList());
+  Future<void> delete(Language l) async {
+    try {
+      await mlkit.delete(l.code);
+    } catch (_) {}
+    _status[l.code]!.brain = false;
     notifyListeners();
   }
 }

@@ -15,6 +15,13 @@ perms = """    <uses-permission android:name="android.permission.RECORD_AUDIO" /
 if "RECORD_AUDIO" not in xml:
     xml = xml.replace("<application", perms + "    <application", 1)
 xml = re.sub(r'android:label="[^"]*"', f'android:label="{APP_NAME}"', xml, count=1)
+if "android.speech.RecognitionService" not in xml:
+    xml = xml.replace("</manifest>", """    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+</manifest>""")
 manifest.write_text(xml)
 
 # ---------- iOS ----------
@@ -125,5 +132,12 @@ if ks.exists():
             t = t.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
             app_groovy.write_text(t)
     print("Release signing configured.")
+
+# ML Kit needs iOS 15.5+.
+pod = pathlib.Path("ios/Podfile")
+if pod.exists():
+    t = pod.read_text()
+    t = re.sub(r"^#?\s*platform :ios, '[\d.]+'", "platform :ios, '15.5'", t, count=1, flags=re.M)
+    pod.write_text(t)
 
 print("Platforms patched.")

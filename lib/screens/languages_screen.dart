@@ -18,26 +18,28 @@ class LanguagesScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
             children: [
-              const Text('Languages', style: headline),
+              Row(
+                children: [
+                  const Expanded(child: Text('Languages', style: headline)),
+                  IconButton(
+                    tooltip: 'Re-check what\'s installed',
+                    onPressed: mm.refresh,
+                    icon: const Icon(Icons.refresh_rounded, color: Palette.muted, size: 28),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               const Text(
-                'Download on wifi once. Then it all works with no signal.',
-                style: TextStyle(color: Palette.muted, fontSize: 17, fontWeight: FontWeight.w600),
+                'Tap a language to add it. Tap Get to put its ears + brain on the phone (about 60 MB, once). Then it works with no signal.',
+                style: TextStyle(color: Palette.muted, fontSize: 16, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 26),
-              const _SectionLabel('ENGINES (download once)'),
-              const SizedBox(height: 10),
-              for (final p in allPacks) ...[
-                _EngineCard(pack: p, status: mm.pack(p.id)),
-                const SizedBox(height: 12),
-              ],
-              const SizedBox(height: 28),
-              const _SectionLabel('YOUR LANGUAGES'),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
+              _EnglishRow(brain: mm.englishBrain, ears: mm.englishEars),
+              const SizedBox(height: 18),
               ...travelLanguages.map(
                 (l) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _LanguageTile(lang: l, installed: mm.isLanguageInstalled(l.code)),
+                  child: _LanguageTile(lang: l, chosen: mm.isChosen(l.code), status: mm.status(l.code)),
                 ),
               ),
               const SizedBox(height: 18),
@@ -47,7 +49,7 @@ class LanguagesScreen extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const DiagScreen()),
                   ),
                   icon: const Icon(Icons.bug_report_outlined, color: Palette.muted),
-                  label: const Text('Diagnostics', style: TextStyle(color: Palette.muted, fontSize: 16)),
+                  label: Text('Diagnostics · v$appVersion', style: const TextStyle(color: Palette.muted, fontSize: 16)),
                 ),
               ),
             ],
@@ -58,187 +60,123 @@ class LanguagesScreen extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          color: Palette.muted,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 2,
-        ),
-      );
-}
-
-class _EngineCard extends StatelessWidget {
-  final EnginePack pack;
-  final PackStatus status;
-  const _EngineCard({required this.pack, required this.status});
-
+class _EnglishRow extends StatelessWidget {
+  final bool brain, ears;
+  const _EnglishRow({required this.brain, required this.ears});
   @override
   Widget build(BuildContext context) {
-    final mm = ModelManager.instance;
-    final installed = status.state == PackState.installed;
-    final downloading = status.state == PackState.downloading;
-
+    final ok = brain && ears;
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Palette.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: installed ? Palette.ok.withOpacity(0.6) : Colors.transparent, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(color: Palette.card, borderRadius: BorderRadius.circular(14)),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(
-                switch (pack.id) { 'whisper' || 'whisper_small' => Icons.hearing_rounded, 'vad' => Icons.bolt_rounded, _ => Icons.psychology_rounded },
-                color: installed ? Palette.ok : Palette.gold,
-                size: 30,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(pack.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                    Text('${pack.subtitle} · ${pack.sizeMb} MB',
-                        style: const TextStyle(color: Palette.muted, fontSize: 14)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (installed)
-            Row(
-              children: [
-                const _Pill('READY', Palette.ok),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => mm.delete(pack),
-                  child: const Text('Delete', style: TextStyle(color: Palette.muted, fontSize: 15)),
-                ),
-              ],
-            )
-          else if (downloading)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: status.progress == 0 ? null : status.progress,
-                    minHeight: 12,
-                    backgroundColor: Palette.bg,
-                    color: Palette.you,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('${(status.progress * 100).toStringAsFixed(0)}%  ·  '
-                        '${(status.progress * pack.sizeMb).toStringAsFixed(0)} / ${pack.sizeMb} MB',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () => mm.cancel(pack.id),
-                      child: const Text('Cancel', style: TextStyle(color: Palette.them, fontSize: 15)),
-                    ),
-                  ],
-                ),
-              ],
-            )
-          else
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (status.error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(status.error!, style: const TextStyle(color: Palette.them, fontSize: 14)),
-                  ),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Palette.you,
-                      foregroundColor: Palette.bg,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () => mm.download(pack),
-                    icon: const Icon(Icons.download_rounded, size: 26),
-                    label: const Text('Download on wifi',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              ],
-            ),
+          const Text('🇺🇸', style: TextStyle(fontSize: 24)),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('English (your side)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+          _Chip(ok ? 'READY' : 'ADDED WITH FIRST LANGUAGE', ok ? Palette.ok : Palette.muted),
         ],
       ),
     );
   }
 }
 
-class _Pill extends StatelessWidget {
+class _Chip extends StatelessWidget {
   final String text;
   final Color color;
-  const _Pill(this.text, this.color);
+  const _Chip(this.text, this.color);
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(text,
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(color: color.withOpacity(0.18), borderRadius: BorderRadius.circular(8)),
+        child: Text(text, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 1)),
       );
 }
 
 class _LanguageTile extends StatelessWidget {
   final Language lang;
-  final bool installed;
-  const _LanguageTile({required this.lang, required this.installed});
+  final bool chosen;
+  final LangStatus status;
+  const _LanguageTile({required this.lang, required this.chosen, required this.status});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => ModelManager.instance.setLanguageInstalled(lang.code, !installed),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: installed ? Palette.them.withOpacity(0.18) : Palette.card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: installed ? Palette.them : Colors.transparent, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Text(lang.flag, style: const TextStyle(fontSize: 34)),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(lang.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  Text(lang.native, style: const TextStyle(color: Palette.muted, fontSize: 15)),
-                ],
+    final mm = ModelManager.instance;
+    final ready = status.state == LangState.ready;
+    final downloading = status.state == LangState.downloading;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: chosen ? Palette.them.withOpacity(0.14) : Palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: chosen ? Palette.them : Colors.transparent, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => mm.setChosen(lang.code, !chosen),
+                child: Row(
+                  children: [
+                    Text(lang.flag, style: const TextStyle(fontSize: 30)),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(lang.name, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                        Text(lang.native, style: const TextStyle(color: Palette.muted, fontSize: 14)),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+              const Spacer(),
+              if (ready)
+                const _Chip('READY', Palette.ok)
+              else if (downloading)
+                const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 3, color: Palette.you))
+              else
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Palette.you,
+                    foregroundColor: Palette.bg,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => mm.download(lang),
+                  child: const Text('Get', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                ),
+              const SizedBox(width: 6),
+              IconButton(
+                onPressed: () => mm.setChosen(lang.code, !chosen),
+                icon: Icon(
+                  chosen ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+                  color: chosen ? Palette.them : Palette.muted,
+                  size: 30,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _Chip(status.ears ? 'EARS ✓' : 'EARS ⬇', status.ears ? Palette.ok : Palette.muted),
+              const SizedBox(width: 6),
+              _Chip(status.brain ? 'BRAIN ✓' : 'BRAIN ⬇', status.brain ? Palette.ok : Palette.muted),
+              if (downloading && status.earsPercent > 0) ...[
+                const SizedBox(width: 8),
+                Text('${status.earsPercent}%', style: const TextStyle(color: Palette.muted, fontSize: 12)),
+              ],
+            ],
+          ),
+          if (status.error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(status.error!, style: const TextStyle(color: Palette.gold, fontSize: 13)),
             ),
-            Icon(
-              installed ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
-              color: installed ? Palette.them : Palette.muted,
-              size: 32,
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+const appVersion = '0.5.0';
+
 /// Palette: deep midnight base, electric coral for "them", cyan for "you".
 class Palette {
   static const bg = Color(0xFF0B0F1A);

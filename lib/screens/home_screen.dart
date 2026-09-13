@@ -31,8 +31,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _toast('Pick at least one language first.');
       return;
     }
-    if (!mm.allEnginesReady) {
-      _toast('Download all three engine packs in Languages first (wifi once).');
+    if (!mm.anyReady) {
+      _toast('Tap Get on a language in the Languages tab first.');
       return;
     }
     final mic = await Permission.microphone.request();
@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       animation: ModelManager.instance,
       builder: (context, _) {
         final mm = ModelManager.instance;
-        final langs = mm.installedLanguages;
+        final langs = mm.readyLanguages;
         _picked.removeWhere((c) => !langs.any((l) => l.code == c));
         if (_picked.isEmpty && langs.isNotEmpty) _picked.add(langs.first.code);
 
@@ -75,14 +75,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Travel Translator', style: headline),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('Travel Translator', style: headline),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text('v$appVersion', style: const TextStyle(color: Palette.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     const Text(
                       'Offline. Live. Both ways.',
                       style: TextStyle(color: Palette.muted, fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 14),
-                    _ReadyRow(ready: mm.allEnginesReady),
+                    _ReadyRow(ready: mm.anyReady),
                     const SizedBox(height: 18),
                     Text(
                       langs.isEmpty ? 'NO LANGUAGES YET' : 'THEY SPEAK  ·  tap one or several',
@@ -96,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     const SizedBox(height: 10),
                     if (langs.isEmpty)
                       const Text(
-                        'Go to Languages and download the ones you need.',
+                        'Go to Languages, add one, and tap Get.',
                         style: TextStyle(fontSize: 17),
                       )
                     else
@@ -150,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       child: Center(
                         child: _TalkButton(
                           pulse: _pulse,
-                          enabled: _picked.isNotEmpty && mm.allEnginesReady,
+                          enabled: _picked.isNotEmpty && mm.anyReady,
                           onTap: _start,
                           size: btn,
                         ),
@@ -193,7 +203,7 @@ class _ReadyRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              ready ? 'All engines ready — works with no signal' : 'Engine packs not downloaded yet',
+              ready ? 'Ready — works with no signal' : 'No language ready yet — see Languages',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
