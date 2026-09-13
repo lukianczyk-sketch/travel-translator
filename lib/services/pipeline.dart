@@ -43,6 +43,11 @@ class Pipeline extends ChangeNotifier {
 
   /// Your side out the phone speaker (for them) even when earbuds are in.
   bool speakerForThem = true;
+
+  /// Who we expect to speak next. Drives the recognizer's primary language:
+  /// after you speak, we listen for them; after they speak, we listen for you.
+  bool expectThem = true;
+  String get _primaryLocale => expectThem ? other.ttsLocale : english.ttsLocale;
   double level = 0;
   Latency? lastLatency;
   Exchange? last;
@@ -73,7 +78,7 @@ class Pipeline extends ChangeNotifier {
     }
     _sub = NativeStt.events.listen(_onEvent);
     final langs = ['en-US', ...others.map((l) => l.ttsLocale)];
-    await NativeStt.start(langs, others.first.ttsLocale);
+    await NativeStt.start(langs, _primaryLocale);
     if (!mm.speechAvailable) _log('note: on-device recognizer not reported available; using system recognizer');
     ready = true;
     status = 'Listening';
@@ -146,6 +151,11 @@ class Pipeline extends ChangeNotifier {
         ? (LangGuess.isEnglish(text, other) ? null : other)
         : LangGuess.detect(text, others);
     if (detected != null) other = detected;
+    if (detected == null && others.length == 1 && expectThem) {
+      // Heuristic said "English-looking" but we were listening in their language:
+      // the recognizer used their language model, so trust that.
+      return true;
+    }
     return detected != null;
   }
 
@@ -206,13 +216,31 @@ class Pipeline extends ChangeNotifier {
         _log('ERROR tts: $e');
       }
       _speaking = false;
-      if (!_stopped) await NativeStt.resume();
+      expectThem = !fromThem;
+      if (!_stopped) await NativeStt.resume(primary: _primaryLocale);
     } else {
       lastLatency = Latency(t1.difference(t0).inMilliseconds, t1.difference(t0).inMilliseconds);
+      expectThem = !fromThem;
+      if (!_stopped) {
+        await NativeStt.pause();
+        await NativeStt.resume(primary: _primaryLocale);
+      }
     }
+    _log('now listening for ${expectThem ? other.name : 'English'}');
     turn = Turn.listening;
     status = 'Listening';
     notifyListeners();
+  }
+
+  /// Tap a panel to force who speaks next.
+  Future<void> expect(bool them) async {
+    if (expectThem == them) return;
+    expectThem = them;
+    _log('manual: listening for ${them ? other.name : 'English'}');
+    notifyListeners();
+    if (_speaking || _stopped) return;
+    await NativeStt.pause();
+    await NativeStt.resume(primary: _primaryLocale);
   }
 
   Future<void> replay() async {
@@ -222,7 +250,7 @@ class Pipeline extends ChangeNotifier {
     await NativeStt.pause();
     await _speaker.say(e.translated, e.speakLocale, forceSpeaker: !e.fromThem && speakerForThem);
     _speaking = false;
-    if (!_stopped) await NativeStt.resume();
+    if (!_stopped) await NativeStt.resume(primary: _primaryLocale);
   }
 
   Future<void> stop() async {

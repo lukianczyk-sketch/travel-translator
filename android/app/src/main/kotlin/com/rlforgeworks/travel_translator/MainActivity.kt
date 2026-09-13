@@ -82,7 +82,10 @@ class MainActivity : FlutterActivity() {
                 }
                 "stop" -> { stopListening(); result.success(true) }
                 "pause" -> { pauseListening(); result.success(true) }
+                "setPrimary" -> { primary = call.argument<String>("primary") ?: primary; result.success(true) }
                 "resume" -> {
+                    val p = call.argument<String>("primary")
+                    if (p != null) primary = p
                     if (!listening) {
                         // Make sure the previous session is fully torn down before starting again.
                         main.post { try { recognizer?.cancel() } catch (_: Exception) {} }

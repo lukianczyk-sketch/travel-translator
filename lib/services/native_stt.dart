@@ -49,7 +49,7 @@ class NativeStt {
   static Future<void> start(List<String> languages, String primary) =>
       _m.invokeMethod('start', {'languages': languages, 'primary': primary});
   static Future<void> pause() => _m.invokeMethod('pause');
-  static Future<void> resume() => _m.invokeMethod('resume');
+  static Future<void> resume({String? primary}) => _m.invokeMethod('resume', {'primary': primary});
   static Future<void> stop() => _m.invokeMethod('stop');
 
   /// Which speech language packs are installed / downloadable on this phone.

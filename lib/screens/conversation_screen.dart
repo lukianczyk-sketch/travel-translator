@@ -58,7 +58,9 @@ class _ConversationScreenState extends State<ConversationScreen>
           body: Column(
             children: [
               Expanded(
-                child: _Panel(
+                child: GestureDetector(
+                  onTap: () => _pipe.expect(true),
+                  child: _Panel(
                   color: Palette.them,
                   soft: Palette.themSoft,
                   label: multi ? '${widget.languages.map((l) => l.flag).join(' ')}  THEM  →  ENGLISH' : '${lang.flag}  THEM  →  ENGLISH',
@@ -69,6 +71,8 @@ class _ConversationScreenState extends State<ConversationScreen>
                       : themLast?.translated ?? (_pipe.ready ? 'Waiting for someone to speak…' : _pipe.status),
                   scale: big,
                   top: true,
+                  listening: _pipe.ready && _pipe.expectThem,
+                ),
                 ),
               ),
               _StatusBar(
@@ -86,7 +90,9 @@ class _ConversationScreenState extends State<ConversationScreen>
                 onSpeaker: () => setState(() => _pipe.speakerForThem = !_pipe.speakerForThem),
               ),
               Expanded(
-                child: _Panel(
+                child: GestureDetector(
+                  onTap: () => _pipe.expect(false),
+                  child: _Panel(
                   color: Palette.you,
                   soft: Palette.youSoft,
                   label: '🇺🇸  YOU  →  ${lang.name.toUpperCase()}',
@@ -95,6 +101,8 @@ class _ConversationScreenState extends State<ConversationScreen>
                   translated: liveYou != null ? '…' : youLast?.translated ?? 'Your words will appear here in ${lang.name}.',
                   scale: big,
                   top: false,
+                  listening: _pipe.ready && !_pipe.expectThem,
+                ),
                 ),
               ),
             ],
@@ -116,6 +124,7 @@ class _Panel extends StatelessWidget {
   final Color color, soft;
   final String label, original, translated;
   final bool active, top;
+  final bool listening;
   final double scale;
   const _Panel({
     required this.color,
@@ -126,6 +135,7 @@ class _Panel extends StatelessWidget {
     required this.translated,
     required this.scale,
     required this.top,
+    this.listening = false,
   });
 
   @override
@@ -148,8 +158,27 @@ class _Panel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label,
+                        style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                  ),
+                  if (listening)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(color: color.withOpacity(0.22), borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.mic_rounded, size: 14, color: color),
+                          const SizedBox(width: 4),
+                          Text('LISTENING', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 8),
               Expanded(
                 child: SingleChildScrollView(
