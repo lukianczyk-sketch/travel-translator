@@ -70,7 +70,14 @@ class MainActivity : FlutterActivity() {
                     val l = call.argument<List<String>>("languages") ?: listOf("en-US")
                     langs = ArrayList(l)
                     primary = call.argument<String>("primary") ?: l.first()
-                    startListening()
+                    currentLang = null
+                    busyCount = 0
+                    // Always begin with a fresh recognizer.
+                    main.post {
+                        try { recognizer?.cancel(); recognizer?.destroy() } catch (_: Exception) {}
+                        recognizer = null
+                        startListening()
+                    }
                     result.success(true)
                 }
                 "stop" -> { stopListening(); result.success(true) }
@@ -291,7 +298,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private val listener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) { send(mapOf("type" to "status", "message" to "ready")) }
+        override fun onReadyForSpeech(params: Bundle?) { busyCount = 0; send(mapOf("type" to "status", "message" to "ready")) }
         override fun onBeginningOfSpeech() { send(mapOf("type" to "speech", "on" to true)) }
         override fun onRmsChanged(rmsdB: Float) { send(mapOf("type" to "rms", "value" to rmsdB)) }
         override fun onBufferReceived(buffer: ByteArray?) {}
