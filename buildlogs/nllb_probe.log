@@ -9,17 +9,8 @@ post_processor: {"type": "TemplateProcessing", "single": [{"SpecialToken": {"id"
 eng_Latn id: 256047 pol_Latn id: 256140 </s>: 2
 input ids: [256140, 31978, 1836, 390, 51122, 248073, 2492, 6870, 359, 8000, 583, 80, 248130, 2]
 encoder hidden: (1, 14, 1024) float32
-step0 with dummy past seq_len=1: OK in 0.24s; logits (1, 2, 256206)
+step0 with dummy past seq_len=1: OK in 0.26s; logits (1, 2, 256206)
   present shapes sample: [('present.0.decoder.key', (1, 16, 2, 64)), ('present.0.decoder.value', (1, 16, 2, 64)), ('present.0.encoder.key', (1, 16, 14, 64)), ('present.0.encoder.value', (1, 16, 14, 64))]
-PROBE CRASHED:
-Traceback (most recent call last):
-  File "/home/runner/work/travel-translator/travel-translator/tools/nllb_probe.py", line 100, in <module>
-    main()
-  File "/home/runner/work/travel-translator/travel-translator/tools/nllb_probe.py", line 90, in main
-    outs = dec.run(None, feeds)
-           ^^^^^^^^^^^^^^^^^^^^
-  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 395, in run
-    return self._sess.run(output_names, input_feed, run_options)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-onnxruntime.capi.onnxruntime_pybind11_state.Fail: [ONNXRuntimeError] : 1 : FAIL : Non-zero status code returned while running If node. Name:'optimum::if' Status Message: Non-zero status code returned while running Reshape node. Name:'/model/decoder/layers.0/encoder_attn/Reshape_4' Status Message: /onnxruntime_src/onnxruntime/core/providers/cpu/tensor/reshape_helper.h:33 onnxruntime::ReshapeHelper::ReshapeHelper(const onnxruntime::TensorShape&, onnxruntime::TensorShapeVector&, bool) i < input_shape.NumDimensions() was false. The dimension with value zero exceeds the dimension size of the input tensor.
-
+cache-branch encoder present shape: [(0, 16, 1, 64), (0, 16, 1, 64)]
+greedy decode: 8 tokens in 0.83s
+decoded: Is this train going to Krakow?
