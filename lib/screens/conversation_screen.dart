@@ -140,25 +140,29 @@ class _Panel extends StatelessWidget {
         top: top,
         bottom: !top,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: top ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               Text(label,
-                  style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2)),
-              const SizedBox(height: 10),
-              if (original.isNotEmpty)
-                Text(original,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Palette.muted, fontSize: 18 * scale, height: 1.3)),
-              if (original.isNotEmpty) const SizedBox(height: 8),
-              Text(
-                translated,
-                maxLines: 6,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 30 * scale, fontWeight: FontWeight.w800, height: 1.15, letterSpacing: -0.5),
+                  style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        translated,
+                        style: TextStyle(fontSize: 30 * scale, fontWeight: FontWeight.w800, height: 1.15, letterSpacing: -0.5),
+                      ),
+                      if (original.isNotEmpty) const SizedBox(height: 10),
+                      if (original.isNotEmpty)
+                        Text(original,
+                            style: TextStyle(color: Palette.muted, fontSize: 17 * scale, height: 1.3)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
