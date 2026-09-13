@@ -215,7 +215,7 @@ class MainActivity : FlutterActivity() {
             try { mp.release() } catch (_: Exception) {}
             if (speaker) {
                 try {
-                    if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else @Suppress("DEPRECATION") am.setSpeakerphoneOn(false)
+                    if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else am.setSpeakerphoneOn(false)
                     am.mode = AudioManager.MODE_NORMAL
                 } catch (_: Exception) {}
             }
@@ -229,7 +229,7 @@ class MainActivity : FlutterActivity() {
                     val spk = am.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                     if (spk != null) am.setCommunicationDevice(spk)
                 } else {
-                    @Suppress("DEPRECATION") am.setSpeakerphoneOn(true)
+                    am.setSpeakerphoneOn(true)
                 }
                 mp.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
