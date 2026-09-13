@@ -7,6 +7,7 @@ import 'package:whisper_ggml_plus/whisper_ggml_plus.dart';
 /// utterance pays the load cost.
 class SpeechToText {
   final String modelPath;
+  final String vadModelPath; // plugin rejects a null field even when VAD is off
   final int threads;
   final Whisper _whisper = const Whisper(model: WhisperModel.largeV3Turbo);
 
@@ -14,7 +15,7 @@ class SpeechToText {
   /// conversational utterances, which are always shorter than that.
   bool fast = true;
 
-  SpeechToText({required this.modelPath, this.threads = 6});
+  SpeechToText({required this.modelPath, required this.vadModelPath, this.threads = 6});
 
   /// Warm the model so the first real sentence isn't slow.
   Future<void> warmUp(String silentWavPath) async {
@@ -32,6 +33,7 @@ class SpeechToText {
         isNoTimestamps: true,
         speedUp: fast,
         vadMode: WhisperVadMode.disabled,
+        vadModelPath: vadModelPath,
       ),
       modelPath: modelPath,
     );

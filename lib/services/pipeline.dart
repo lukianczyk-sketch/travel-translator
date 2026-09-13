@@ -67,6 +67,7 @@ class Pipeline extends ChangeNotifier {
     _log('pipeline start: languages=${others.map((l) => l.code).join(',')}');
     _stt = SpeechToText(
       modelPath: mm.filePath('ggml-large-v3-turbo-q8_0.bin'),
+      vadModelPath: mm.filePath('silero_vad.onnx'),
       threads: Diag.instance.whisperThreads,
     )..fast = Diag.instance.fastWhisper;
     await WakelockPlus.enable();
