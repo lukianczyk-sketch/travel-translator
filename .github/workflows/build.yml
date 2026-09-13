@@ -65,8 +65,7 @@ jobs:
             echo "== plugins ==";  cat .flutter-plugins-dependencies 2>/dev/null | head -c 3000; echo;
             echo "== pub deps (mlkit) =="; flutter pub deps --style=compact 2>/dev/null | grep -i "mlkit\|tts\|wakelock"; } > registrant.txt
           cat registrant.txt
-          cp registrant.txt build.log
-          bash tools/publish_log.sh registrant
+          LOG_SRC=registrant.txt bash tools/publish_log.sh registrant
 
       - uses: actions/upload-artifact@v4
         with:

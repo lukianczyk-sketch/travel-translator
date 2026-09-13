@@ -4,8 +4,9 @@
 set -e
 PLATFORM="$1"
 mkdir -p buildlogs
-if [ -f build.log ]; then
-  tail -c 120000 build.log > "buildlogs/${PLATFORM}.log"
+SRC="${LOG_SRC:-build.log}"
+if [ -f "$SRC" ]; then
+  tail -c 120000 "$SRC" > "buildlogs/${PLATFORM}.log"
 else
   echo "no build.log captured" > "buildlogs/${PLATFORM}.log"
 fi

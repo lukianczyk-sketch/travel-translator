@@ -56,7 +56,7 @@ class Pipeline extends ChangeNotifier {
   bool _busy = false;
   bool _stopped = false;
   bool _speaking = false;
-  int _busy = 0;
+  int _busyErrors = 0;
   bool _readyLogged = false;
 
   void _log(String m) => Diag.instance.log(m);
@@ -112,8 +112,8 @@ class Pipeline extends ChangeNotifier {
         }
       case 'error':
         if (e.data['code'] == 8) {
-          _busy++;
-          if (_busy == 1 || _busy % 5 == 0) _log('recognizer busy (x$_busy) — resetting');
+          _busyErrors++;
+          if (_busyErrors == 1 || _busyErrors % 5 == 0) _log('recognizer busy (x$_busyErrors) — resetting');
           return;
         }
         _log('ERROR recognizer: ${e.data['message']}');
@@ -121,8 +121,8 @@ class Pipeline extends ChangeNotifier {
         notifyListeners();
       case 'status':
         if (e.data['message'] == 'ready') {
-          if (_busy > 0) _log('recognizer recovered after $_busy busy errors');
-          _busy = 0;
+          if (_busyErrors > 0) _log('recognizer recovered after $_busyErrors busy errors');
+          _busyErrors = 0;
           if (!_readyLogged) {
             _readyLogged = true;
             _log('recognizer ready — mic is live');
