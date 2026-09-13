@@ -1,0 +1,25 @@
+ENC inputs: [('input_ids', ['batch_size', 'encoder_sequence_length'], 'tensor(int64)'), ('attention_mask', ['batch_size', 'encoder_sequence_length'], 'tensor(int64)')]
+ENC outputs: [('last_hidden_state', ['batch_size', 'encoder_sequence_length', 1024])]
+DEC inputs: [('encoder_attention_mask', ['batch_size', 'encoder_sequence_length'], 'tensor(int64)'), ('input_ids', ['batch_size', 'decoder_sequence_length'], 'tensor(int64)'), ('encoder_hidden_states', ['batch_size', 'encoder_sequence_length', 1024], 'tensor(float)'), ('past_key_values.0.decoder.key', ['batch_size', 16, 'past_decoder_sequence_length', 64], 'tensor(float)'), ('past_key_values.0.decoder.value', ['batch_size', 16, 'past_decoder_sequence_length', 64], 'tensor(float)'), ('past_key_values.0.encoder.key', ['batch_size', 16, 'encoder_sequence_length_out', 64], 'tensor(float)'), ('past_key_values.0.encoder.value', ['batch_size', 16, 'encoder_sequence_length_out', 64], 'tensor(float)'), ('past_key_values.1.decoder.key', ['batch_size', 16, 'past_decoder_sequence_length', 64], 'tensor(float)')] ... total 52
+DEC outputs: [('logits', ['batch_size', 'decoder_sequence_length', 256206]), ('present.0.decoder.key', ['batch_size', 16, 'past_decoder_sequence_length + 1', 64]), ('present.0.decoder.value', ['batch_size', 16, 'past_decoder_sequence_length + 1', 64]), ('present.0.encoder.key', ['batch_size', 16, 'encoder_sequence_length_out', 64]), ('present.0.encoder.value', ['batch_size', 16, 'encoder_sequence_length_out', 64]), ('present.1.decoder.key', ['batch_size', 16, 'past_decoder_sequence_length + 1', 64])] ... total 49
+tokenizer model type: BPE | merges sample: ['a n', '▁ n', '▁ m']
+normalizer: {"type": "Sequence", "normalizers": [{"type": "Precompiled", "precompiled_charsmap": "ALQCAACEAAAAAACAAQAAgMz8AgC4BQAAhyIAgMzkAgC4PQAAeyIAgMzsAgC4BQAAiyIAgMw8AADNvAAAmwkAgJ4JAIChCQCAgx0AAIAZAACBGQAAPR0AgDUdAIBNHQCARR0AgIAxAACBMQAApAkAgIkxAAA9WAMAPEgDAEAKAIA+aAMAAYUAAIQBAQADjQAAAokAAAWVAAAEkQAAB50AAA
+pre_tokenizer: {"type": "Metaspace", "replacement": "\u2581", "add_prefix_space": true}
+post_processor: {"type": "TemplateProcessing", "single": [{"SpecialToken": {"id": "eng_Latn", "type_id": 0}}, {"Sequence": {"id": "A", "type_id": 0}}, {"SpecialToken": {"id": "</s>", "type_id": 0}}], "pair": [{"SpecialToken": {"id": "eng_Latn", "type_id": 0}}, {"Sequence": {"id": "A", "type_id": 0}}, {"Sequence": {"id": "B", "type_id": 0}}, {"SpecialToken": {"id": "</s>", "type_id": 0}}], "special_tokens": {"</s>
+eng_Latn id: 256047 pol_Latn id: 256140 </s>: 2
+input ids: [256140, 31978, 1836, 390, 51122, 248073, 2492, 6870, 359, 8000, 583, 80, 248130, 2]
+encoder hidden: (1, 14, 1024) float32
+step0 with dummy past seq_len=1: OK in 0.24s; logits (1, 2, 256206)
+  present shapes sample: [('present.0.decoder.key', (1, 16, 2, 64)), ('present.0.decoder.value', (1, 16, 2, 64)), ('present.0.encoder.key', (1, 16, 14, 64)), ('present.0.encoder.value', (1, 16, 14, 64))]
+PROBE CRASHED:
+Traceback (most recent call last):
+  File "/home/runner/work/travel-translator/travel-translator/tools/nllb_probe.py", line 100, in <module>
+    main()
+  File "/home/runner/work/travel-translator/travel-translator/tools/nllb_probe.py", line 90, in main
+    outs = dec.run(None, feeds)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 395, in run
+    return self._sess.run(output_names, input_feed, run_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+onnxruntime.capi.onnxruntime_pybind11_state.Fail: [ONNXRuntimeError] : 1 : FAIL : Non-zero status code returned while running If node. Name:'optimum::if' Status Message: Non-zero status code returned while running Reshape node. Name:'/model/decoder/layers.0/encoder_attn/Reshape_4' Status Message: /onnxruntime_src/onnxruntime/core/providers/cpu/tensor/reshape_helper.h:33 onnxruntime::ReshapeHelper::ReshapeHelper(const onnxruntime::TensorShape&, onnxruntime::TensorShapeVector&, bool) i < input_shape.NumDimensions() was false. The dimension with value zero exceeds the dimension size of the input tensor.
+
