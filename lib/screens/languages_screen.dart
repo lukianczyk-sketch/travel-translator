@@ -73,8 +73,16 @@ class _EnglishRow extends StatelessWidget {
         children: [
           const Text('🇺🇸', style: TextStyle(fontSize: 24)),
           const SizedBox(width: 10),
-          const Expanded(child: Text('English (your side)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
-          _Chip(ok ? 'READY' : 'ADDED WITH FIRST LANGUAGE', ok ? Palette.ok : Palette.muted),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('English — your side', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                Text(ok ? 'Ready' : 'Installs automatically with your first language',
+                    style: TextStyle(color: ok ? Palette.ok : Palette.muted, fontSize: 14, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
         ],
       ),
     );

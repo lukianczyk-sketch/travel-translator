@@ -115,7 +115,7 @@ if ks.exists():
         }
     }""", 1)
             t = t.replace('signingConfig = signingConfigs.getByName("debug")',
-                          'signingConfig = signingConfigs.getByName("release")')
+                          'signingConfig = signingConfigs.getByName("release")\n            isMinifyEnabled = false\n            isShrinkResources = false')
             app_kts.write_text(t)
     elif app_groovy.exists():
         t = app_groovy.read_text()
@@ -129,7 +129,7 @@ if ks.exists():
             keyPassword "traveltranslator"
         }
     }""", 1)
-            t = t.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
+            t = t.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release\n            minifyEnabled false\n            shrinkResources false")
             app_groovy.write_text(t)
     print("Release signing configured.")
 
