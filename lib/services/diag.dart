@@ -14,7 +14,7 @@ class Diag extends ChangeNotifier {
   File? _file;
 
   // Tunables surfaced on the Diagnostics screen.
-  bool fastWhisper = true;
+  bool fastWhisper = false;
   int whisperThreads = 6;
 
   Future<void> init() async {
@@ -25,13 +25,17 @@ class Diag extends ChangeNotifier {
       lines.addAll(old.length > 400 ? old.sublist(old.length - 400) : old);
     }
     final prefs = await SharedPreferences.getInstance();
-    fastWhisper = prefs.getBool('fast_whisper') ?? true;
+    fastWhisper = prefs.getBool('fast_whisper') ?? false;
     whisperThreads = prefs.getInt('whisper_threads') ?? 6;
     log('--- app start ${DateTime.now()} ---');
   }
 
   void log(String msg) {
-    final line = '${_ts()} $msg';
+    int rss = 0;
+    try {
+      rss = ProcessInfo.currentRss ~/ (1024 * 1024);
+    } catch (_) {}
+    final line = '${_ts()} [${rss}MB] $msg';
     lines.add(line);
     if (lines.length > 600) lines.removeRange(0, lines.length - 600);
     try {

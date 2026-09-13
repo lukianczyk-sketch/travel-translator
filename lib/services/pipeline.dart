@@ -64,9 +64,9 @@ class Pipeline extends ChangeNotifier {
 
   Future<void> start() async {
     final mm = ModelManager.instance;
-    _log('pipeline start: languages=${others.map((l) => l.code).join(',')}');
+    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} ears=${mm.earsModel}');
     _stt = SpeechToText(
-      modelPath: mm.filePath('ggml-large-v3-turbo-q8_0.bin'),
+      modelPath: mm.filePath(mm.earsFileName),
       vadModelPath: mm.filePath('silero_vad.onnx'),
       threads: Diag.instance.whisperThreads,
     )..fast = Diag.instance.fastWhisper;
@@ -87,7 +87,8 @@ class Pipeline extends ChangeNotifier {
     notifyListeners();
     final warm = await ensureSilentWav(mm.modelsPath);
     final tw = DateTime.now();
-    await _stt!.warmUp(warm);
+    final warmErr = await _stt!.warmUp(warm);
+    if (warmErr != null) _log('warm-up note: $warmErr');
     _log('Whisper warm in ${DateTime.now().difference(tw).inMilliseconds} ms (fast=${_stt!.fast}, threads=${_stt!.threads})');
     await _speaker.init();
     _log('TTS ready');
@@ -138,7 +139,7 @@ class Pipeline extends ChangeNotifier {
     _log('whisper: transcribing…');
     String text;
     try {
-      text = await _stt!.transcribe(path);
+      text = SpeechToText.collapseRepeats(await _stt!.transcribe(path));
       _log('whisper: "${text.length > 80 ? '${text.substring(0, 80)}…' : text}" in ${DateTime.now().difference(t0).inMilliseconds} ms');
     } catch (e) {
       _log('ERROR whisper: $e');

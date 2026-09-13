@@ -51,6 +51,14 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Compile whisper.cpp for the phone's real CPU (dotprod + i8mm + fp16)
+        shell: bash
+        run: |
+          d=$(ls -d ~/.pub-cache/hosted/pub.dev/whisper_ggml_plus-*/ | tail -1)
+          f="$d/android/src/whisper/CMakeLists.txt"
+          grep -q GGML_CPU_ARM_ARCH "$f" || sed -i 's|^add_subdirectory("${GGML_VENDOR_DIR}"|if (ANDROID_ABI STREQUAL "arm64-v8a")\n    set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+i8mm+fp16" CACHE STRING "" FORCE)\nendif()\nadd_subdirectory("${GGML_VENDOR_DIR}"|' "$f"
+          grep -n "GGML_CPU_ARM_ARCH" "$f"
+
       - name: Build APK
         shell: bash
         run: |

@@ -103,6 +103,19 @@ const whisperPack = EnginePack(
   ],
 );
 
+const whisperSmallPack = EnginePack(
+  id: 'whisper_small',
+  title: 'Ears (fast) — Whisper small',
+  subtitle: 'Much quicker, a little less sharp. Pick one Ears in Diagnostics.',
+  files: [
+    PackFile(
+      url: '$_hfWhisper/ggml-small-q8_0.bin',
+      fileName: 'ggml-small-q8_0.bin',
+      sizeMb: 264,
+    ),
+  ],
+);
+
 const vadPack = EnginePack(
   id: 'vad',
   title: 'Reflexes — Silero VAD',
@@ -127,4 +140,4 @@ const nllbPack = EnginePack(
   ],
 );
 
-const allPacks = [whisperPack, nllbPack, vadPack];
+const allPacks = [whisperPack, whisperSmallPack, nllbPack, vadPack];

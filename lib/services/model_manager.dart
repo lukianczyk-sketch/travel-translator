@@ -29,7 +29,18 @@ class ModelManager extends ChangeNotifier {
 
   PackStatus pack(String id) => _packs[id]!;
   bool isInstalled(String id) => pack(id).state == PackState.installed;
-  bool get allEnginesReady => allPacks.every((p) => isInstalled(p.id));
+  /// Which Ears model to use: 'turbo' (best) or 'small' (fast).
+  String earsModel = 'turbo';
+  String get earsPackId => earsModel == 'small' ? whisperSmallPack.id : whisperPack.id;
+  String get earsFileName => earsModel == 'small' ? whisperSmallPack.files.first.fileName : whisperPack.files.first.fileName;
+  bool get allEnginesReady =>
+      isInstalled(earsPackId) && isInstalled(nllbPack.id) && isInstalled(vadPack.id);
+  Future<void> setEarsModel(String m) async {
+    earsModel = m;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ears_model', m);
+    notifyListeners();
+  }
   bool isLanguageInstalled(String code) => _installedLanguages.contains(code);
   List<Language> get installedLanguages =>
       travelLanguages.where((l) => _installedLanguages.contains(l.code)).toList();
@@ -47,6 +58,7 @@ class ModelManager extends ChangeNotifier {
     }
     final prefs = await SharedPreferences.getInstance();
     _installedLanguages.addAll(prefs.getStringList('langs') ?? const []);
+    earsModel = prefs.getString('ears_model') ?? 'turbo';
     notifyListeners();
   }
 

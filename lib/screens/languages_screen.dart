@@ -97,7 +97,7 @@ class _EngineCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                switch (pack.id) { 'whisper' => Icons.hearing_rounded, 'vad' => Icons.bolt_rounded, _ => Icons.psychology_rounded },
+                switch (pack.id) { 'whisper' || 'whisper_small' => Icons.hearing_rounded, 'vad' => Icons.bolt_rounded, _ => Icons.psychology_rounded },
                 color: installed ? Palette.ok : Palette.gold,
                 size: 30,
               ),

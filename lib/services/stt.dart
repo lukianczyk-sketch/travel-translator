@@ -18,10 +18,24 @@ class SpeechToText {
   SpeechToText({required this.modelPath, required this.vadModelPath, this.threads = 6});
 
   /// Warm the model so the first real sentence isn't slow.
-  Future<void> warmUp(String silentWavPath) async {
+  /// Returns an error string if the warm-up transcription failed.
+  Future<String?> warmUp(String silentWavPath) async {
     try {
       await transcribe(silentWavPath);
-    } catch (_) {}
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Whisper sometimes emits the same sentence twice in a row; keep one.
+  static String collapseRepeats(String t) {
+    final parts = t.split(RegExp(r'(?<=[.!?。！？])\s+')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final out = <String>[];
+    for (final p in parts) {
+      if (out.isEmpty || out.last.toLowerCase() != p.toLowerCase()) out.add(p);
+    }
+    return out.join(' ');
   }
 
   Future<String> transcribe(String wavPath) async {

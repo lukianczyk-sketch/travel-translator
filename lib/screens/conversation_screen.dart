@@ -199,14 +199,14 @@ class _StatusBar extends StatelessWidget {
         ? 'hear ${_s(lat.hearMs)} · translate ${_s(lat.translateMs)} · total ${_s(lat.totalMs)}'
         : pipe.status;
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       color: Palette.bg2,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              _RoundBtn(icon: Icons.stop_rounded, color: Palette.them, onTap: onStop, size: 56),
+              _RoundBtn(icon: Icons.stop_rounded, color: Palette.them, onTap: onStop, size: 46),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -233,7 +233,7 @@ class _StatusBar extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(child: _BarBtn(icon: Icons.replay_rounded, label: 'Replay', on: false, onTap: onReplay)),
@@ -263,7 +263,7 @@ class _BarBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 40,
+        height: 34,
         decoration: BoxDecoration(
           color: on ? Palette.gold : Palette.card,
           borderRadius: BorderRadius.circular(12),
