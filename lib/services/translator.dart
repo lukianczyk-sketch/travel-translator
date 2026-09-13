@@ -207,7 +207,9 @@ class _NllbEngine {
             continue;
           }
           final inName = 'past_key_values.${outName.substring('present.'.length)}';
-          if (_pastInputs.contains(inName)) {
+          // The cache branch only re-emits placeholders for the encoder half;
+          // keep the real encoder K/V from step 0 for the whole sentence.
+          if (_pastInputs.contains(inName) && !(step > 0 && inName.contains('.encoder.'))) {
             newPast[inName] = v;
             keep.add(v);
           } else {

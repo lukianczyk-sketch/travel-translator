@@ -87,10 +87,16 @@ def main():
         feeds = {"input_ids": np.array([[nxt]], dtype=np.int64), "encoder_attention_mask": mask,
                  "encoder_hidden_states": hidden, "use_cache_branch": np.array([True])}
         for n in past_names: feeds[n] = past[n]
-        outs = dec.run(None, feeds)
+        try:
+            outs = dec.run(None, feeds)
+        except Exception as e:
+            log(f"step {step+1} FAILED: {str(e)[:200]}")
+            raise
         for n, o in zip(out_names, outs):
-            if n.startswith("present."):
+            if n.startswith("present.") and ".encoder." not in n:
                 past["past_key_values." + n[len("present."):]] = o
+        if step == 0:
+            log("cache-branch encoder present shape:", [o.shape for n, o in zip(out_names, outs) if ".encoder." in n][:2])
         nxt = int(np.argmax(outs[0][0, -1]))
     log(f"greedy decode: {len(gen)} tokens in {time.time()-t:.2f}s")
     log("decoded:", tok.decode(gen, skip_special_tokens=True))
