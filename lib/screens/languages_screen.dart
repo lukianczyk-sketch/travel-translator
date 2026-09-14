@@ -30,11 +30,13 @@ class LanguagesScreen extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Tap a language to add it. Tap Get to put its ears + brain on the phone (about 60 MB, once). Then it works with no signal.',
+                'Get the Ears once (264 MB). Then tap a language to add it and Get its brain (about 60 MB). All offline after that.',
                 style: TextStyle(color: Palette.muted, fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 14),
-              _EnglishRow(brain: mm.englishBrain, ears: mm.englishEars),
+              _EarsCard(mm: mm),
+              const SizedBox(height: 10),
+              _EnglishRow(brain: mm.englishBrain, ears: mm.earsReady),
               const SizedBox(height: 18),
               ...travelLanguages.map(
                 (l) => Padding(
@@ -56,6 +58,85 @@ class LanguagesScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _EarsCard extends StatelessWidget {
+  final ModelManager mm;
+  const _EarsCard({required this.mm});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: mm.earsReady ? Palette.ok.withOpacity(0.6) : Colors.transparent, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hearing_rounded, color: mm.earsReady ? Palette.ok : Palette.gold, size: 28),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Ears — Whisper small', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text('Hears every language · 264 MB, once', style: TextStyle(color: Palette.muted, fontSize: 14)),
+                  ],
+                ),
+              ),
+              if (mm.earsReady) const _Chip('READY', Palette.ok),
+            ],
+          ),
+          if (!mm.earsReady) ...[
+            const SizedBox(height: 12),
+            if (mm.earsDownloading) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: mm.earsProgress == 0 ? null : mm.earsProgress,
+                  minHeight: 12,
+                  backgroundColor: Palette.bg,
+                  color: Palette.you,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text('${(mm.earsProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(onPressed: mm.cancelEars, child: const Text('Cancel', style: TextStyle(color: Palette.them))),
+                ],
+              ),
+            ] else ...[
+              if (mm.earsError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(mm.earsError!, style: const TextStyle(color: Palette.them, fontSize: 14)),
+                ),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Palette.you,
+                    foregroundColor: Palette.bg,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: mm.downloadEars,
+                  icon: const Icon(Icons.download_rounded, size: 24),
+                  label: const Text('Get the Ears (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }

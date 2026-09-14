@@ -1,0 +1,11 @@
+.DS_Store
+.tmp/
+
+# Dart and build tool artifacts
+.dart_tool/
+build/
+
+# Flutter package metadata
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/

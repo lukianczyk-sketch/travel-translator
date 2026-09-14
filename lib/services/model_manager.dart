@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,20 +35,40 @@ class ModelManager extends ChangeNotifier {
   final Map<String, LangStatus> _status = {for (final l in travelLanguages) l.code: LangStatus()};
   final Set<String> _chosen = {};
   bool englishBrain = false;
-  bool englishEars = false;
+  bool englishEars = true;
   bool speechAvailable = false;
-  bool canCheckEars = false; // Android 13+ can list installed speech packs
+  bool canCheckEars = false;
   int sdk = 0;
   StreamSubscription? _evSub;
+
+  // ---- Ears: Whisper small, one file for every language ----
+  static const earsUrl = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin';
+  static const earsFile = 'ggml-small-q8_0.bin';
+  static const earsMb = 264;
+  bool earsReady = false;
+  bool earsDownloading = false;
+  double earsProgress = 0;
+  String? earsError;
+  String modelsPath = '';
+  final Dio _dio = Dio();
+  CancelToken? _earsCancel;
+
+  String filePath(String name) => '$modelsPath/$name';
 
   LangStatus status(String code) => _status[code]!;
   bool isChosen(String code) => _chosen.contains(code);
   List<Language> get chosenLanguages => travelLanguages.where((l) => _chosen.contains(l.code)).toList();
   List<Language> get readyLanguages =>
       chosenLanguages.where((l) => status(l.code).state == LangState.ready).toList();
-  bool get anyReady => readyLanguages.isNotEmpty && englishBrain;
+  bool get anyReady => readyLanguages.isNotEmpty && englishBrain && earsReady;
 
   Future<void> init() async {
+    final base = await getApplicationSupportDirectory();
+    final dir = Directory('${base.path}/models');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    modelsPath = dir.path;
+    final ef = File(filePath(earsFile));
+    earsReady = await ef.exists() && await ef.length() > earsMb * 1000 * 1000 * 0.6;
     final prefs = await SharedPreferences.getInstance();
     _chosen.addAll(prefs.getStringList('langs') ?? const []);
     speechAvailable = await NativeStt.available();
@@ -67,7 +91,10 @@ class ModelManager extends ChangeNotifier {
     } catch (e) {
       Diag.instance.log('ERROR mlkit check: $e');
     }
-    if (canCheckEars) {
+    for (final l in travelLanguages) {
+      _status[l.code]!.ears = earsReady;
+    }
+    if (false && canCheckEars) {
       final r = await NativeStt.checkSupport([...travelLanguages.map((l) => l.ttsLocale), 'en-US']);
       final installed = ((r['installed'] as List?) ?? const []).map((e) => e.toString().toLowerCase()).toList();
       final online = ((r['online'] as List?) ?? const []).map((e) => e.toString().toLowerCase()).toList();
@@ -81,15 +108,49 @@ class ModelManager extends ChangeNotifier {
       for (final l in travelLanguages) {
         _status[l.code]!.ears = has(l.ttsLocale);
       }
-    } else {
-      // Can't inspect; assume the recognizer will fetch what it needs.
-      englishEars = true;
-      for (final l in travelLanguages) {
-        _status[l.code]!.ears = true;
-      }
     }
     notifyListeners();
   }
+
+  Future<void> downloadEars() async {
+    if (earsDownloading) return;
+    earsDownloading = true;
+    earsError = null;
+    earsProgress = 0;
+    notifyListeners();
+    final target = filePath(earsFile);
+    final tmp = '$target.part';
+    _earsCancel = CancelToken();
+    try {
+      await _dio.download(
+        earsUrl,
+        tmp,
+        cancelToken: _earsCancel,
+        options: Options(receiveTimeout: const Duration(hours: 2)),
+        onReceiveProgress: (got, len) {
+          if (len > 0) {
+            earsProgress = got / len;
+            notifyListeners();
+          }
+        },
+      );
+      await File(tmp).rename(target);
+      earsReady = true;
+      Diag.instance.log('ears: whisper small downloaded');
+    } on DioException catch (e) {
+      earsError = CancelToken.isCancel(e) ? null : 'Download failed. Check wifi and retry.';
+      final f = File(tmp);
+      if (await f.exists()) await f.delete();
+    } catch (e) {
+      earsError = 'Download failed: $e';
+    } finally {
+      earsDownloading = false;
+      _earsCancel = null;
+      await refresh();
+    }
+  }
+
+  void cancelEars() => _earsCancel?.cancel();
 
   void _onEvent(SttEvent e) {
     if (e.type != 'download') return;
@@ -139,17 +200,7 @@ class ModelManager extends ChangeNotifier {
         Diag.instance.log('mlkit: downloading ${l.code}');
         s.brain = await mlkit.download(l.code);
       }
-      if (!s.ears && canCheckEars) {
-        Diag.instance.log('speech: requesting pack ${l.ttsLocale}');
-        await NativeStt.download(l.ttsLocale);
-        if (!englishEars) await NativeStt.download('en-US');
-        // Give the system a moment, then re-check (older phones give no callback).
-        await Future.delayed(const Duration(seconds: 8));
-        await refresh();
-        if (!s.ears) {
-          s.error = 'Speech pack is downloading in the background — check back in a minute.';
-        }
-      }
+      s.ears = earsReady;
     } catch (e) {
       s.error = 'Download failed: $e';
       Diag.instance.log('ERROR download ${l.code}: $e');

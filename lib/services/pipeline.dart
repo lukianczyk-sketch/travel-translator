@@ -14,6 +14,7 @@ import 'lang_guess.dart';
 import 'listener.dart';
 import 'model_manager.dart';
 import 'native_stt.dart';
+import 'stt.dart';
 import 'tts.dart';
 
 enum Turn { listening, talking, them, you, thinking, speaking }
@@ -34,8 +35,8 @@ class Exchange {
 }
 
 /// Live conversation, no turn-guessing:
-/// mic + voice detector (ours) → one utterance → recognized in EVERY chosen
-/// language at once, most confident wins → ML Kit → phone voice.
+/// mic + voice detector (ours) → one sentence → Whisper (hears any language,
+/// tells us which) → ML Kit → phone voice.
 class Pipeline extends ChangeNotifier {
   final List<Language> others;
   Language other;
@@ -43,6 +44,8 @@ class Pipeline extends ChangeNotifier {
 
   final Listener _listener = Listener();
   final Speaker _speaker = Speaker();
+  SpeechToText? _stt;
+  int _wavSeq = 0;
 
   Turn turn = Turn.listening;
   String status = 'Starting…';
@@ -75,14 +78,25 @@ class Pipeline extends ChangeNotifier {
   }
 
   Future<void> start() async {
-    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (dual-recognition)');
+    final mm = ModelManager.instance;
+    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (whisper small)');
     await WakelockPlus.enable();
     await _speaker.init();
     if (!NativeStt.isSupportedPlatform) {
-      status = 'iPhone ears arrive in the next build';
+      status = 'iPhone arrives in the next build';
       notifyListeners();
       return;
     }
+    status = 'Warming up the ears…';
+    notifyListeners();
+    _stt = SpeechToText(
+      modelPath: mm.filePath(ModelManager.earsFile),
+      vadModelPath: await _vadPath(),
+      threads: 6,
+    );
+    final tw = DateTime.now();
+    final warmErr = await _stt!.warmUp(await ensureSilentWav(mm.modelsPath));
+    _log('whisper warm in ${DateTime.now().difference(tw).inMilliseconds} ms${warmErr != null ? ' (note: $warmErr)' : ''}');
     await _listener.start(await _vadPath());
     _lvlSub = _listener.level.listen((p) {
       level = p;
@@ -127,46 +141,45 @@ class Pipeline extends ChangeNotifier {
     status = 'Hearing…';
     notifyListeners();
 
-    final langs = ['en-US', ...others.map((l) => l.ttsLocale)];
-    Map<String, dynamic>? res;
+    final seconds = pcm.length / Listener.sampleRate;
+    final path = '${ModelManager.instance.modelsPath}/utt_${_wavSeq++ % 4}.wav';
+    await writeWav(pcm, path);
+    Heard heard;
     try {
-      res = await NativeStt.recognizeAudio(_toPcm16(pcm), langs);
+      heard = await _stt!.transcribe(path, seconds: seconds);
     } catch (e) {
-      _log('ERROR recognize: $e');
-    }
-    final all = (res?['all'] as List?) ?? const [];
-    for (final r in all) {
-      final m = r as Map;
-      _log('  ${m['lang']}: "${m['text']}" conf ${(m['confidence'] as num?)?.toStringAsFixed(2)}'
-          '${m['error'] != null ? ' err ${m['error']}' : ''} (${m['ms']} ms)');
-    }
-    final best = res?['best'] as Map?;
-    final text = ((best?['text'] as String?) ?? '').trim();
-    final t1 = DateTime.now();
-    if (text.isEmpty) {
-      _log('heard nothing usable');
+      _log('ERROR whisper: $e');
       turn = Turn.listening;
       status = 'Listening';
       notifyListeners();
       return;
     }
-    final bestLang = ((best?['lang'] as String?) ?? 'en-US').toLowerCase();
-    var fromThem = !bestLang.startsWith('en');
-    if (fromThem) {
-      final code = bestLang.split('-').first;
-      final match = others.where((l) => l.ttsLocale.toLowerCase().split('-').first == code);
-      if (match.isNotEmpty) other = match.first;
+    final t1 = DateTime.now();
+    final text = SpeechToText.collapseRepeats(heard.text);
+    _log('whisper (${heard.lang}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
+    if (SpeechToText.looksLikeNoise(text)) {
+      _log('ignored as noise');
+      turn = Turn.listening;
+      status = 'Listening';
+      notifyListeners();
+      return;
     }
-    // Sanity check: if the recognizers disagree only slightly, let spelling decide.
-    if (others.length == 1) {
-      final looksEnglish = LangGuess.isEnglish(text, other);
-      if (fromThem && looksEnglish && text.split(' ').length >= 3) {
-        _log('override: text reads as English');
-        fromThem = false;
+    // Direction: Whisper's language, checked against the languages in play.
+    var fromThem = heard.lang != 'en';
+    if (fromThem) {
+      final match = others.where((l) => l.code == heard.lang || (heard.lang == 'no' && l.code == 'no'));
+      if (match.isNotEmpty) {
+        other = match.first;
+      } else if (others.length == 1) {
+        // Whisper heard a language we're not set up for — go by spelling.
+        fromThem = !LangGuess.isEnglish(text, other);
+        _log('note: whisper said ${heard.lang}; using spelling → ${fromThem ? other.code : 'en'}');
+      } else {
+        final d = LangGuess.detect(text, others);
+        fromThem = d != null;
+        if (d != null) other = d;
       }
     }
-    _log('heard (${fromThem ? other.code : 'en'}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
-
     final src = fromThem ? other.code : 'en';
     final tgt = fromThem ? 'en' : other.code;
     turn = fromThem ? Turn.them : Turn.you;
@@ -239,6 +252,7 @@ class Pipeline extends ChangeNotifier {
     await _listener.stop();
     _listener.dispose();
     await _speaker.stop();
+    await _stt?.dispose();
     await WakelockPlus.disable();
   }
 }

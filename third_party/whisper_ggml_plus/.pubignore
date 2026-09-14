@@ -1,0 +1,9 @@
+.DS_Store
+.tmp/
+.dart_tool/
+build/
+.idea/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+tool/__pycache__/
