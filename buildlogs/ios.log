@@ -2,29 +2,47 @@ Warning: Building for device with codesigning disabled. You will have to manuall
 Building com.rlforgeworks.travelTranslator for device (ios-release)...
 The following plugins do not support Swift Package Manager for ios:
   - flutter_tts
+  - onnxruntime
 This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
-Running pod install...                                           1,232ms
-Running Xcode build...                                          
-Xcode build done.                                           48.7s
-Failed to build iOS app
-════════════════════════════════════════════════════════════════════════════════
-Building a deployable iOS app requires a selected Development Team with a 
-Provisioning Profile. Please ensure that a Development Team is selected by:
-  1- Open the Flutter project's Xcode target with
-       open ios/Runner.xcworkspace
-  2- Select the 'Runner' project in the navigator then the 'Runner' target
-     in the project settings
-  3- Make sure a 'Development Team' is selected under Signing & Capabilities > Team. 
-     You may need to:
-         - Log in with your Apple ID in Xcode first
-         - Ensure you have a valid unique Bundle ID
-         - Register your device with your Apple Developer Account
-         - Let Xcode automatically provision a profile for your app
-  4- Build or run your project again
+Running pod install...                                             570ms
+CocoaPods' output:
+↳
+      Preparing
 
-For more information, please visit:
-  https://flutter.dev/to/ios-development-team
+    Analyzing dependencies
 
-Or run on an iOS simulator without code signing
-════════════════════════════════════════════════════════════════════════════════
-Encountered error while building for device.
+    Inspecting targets to integrate
+      Using `ARCHS` setting to build architectures of target `Pods-Runner`: (``)
+      Using `ARCHS` setting to build architectures of target `Pods-RunnerTests`: (``)
+
+    Fetching external sources
+    -> Fetching podspec for `Flutter` from `Flutter`
+    -> Fetching podspec for `flutter_tts` from `.symlinks/plugins/flutter_tts/ios`
+    -> Fetching podspec for `onnxruntime` from `.symlinks/plugins/onnxruntime/ios`
+    -> Fetching podspec for `whisper_ggml_plus` from `.symlinks/plugins/whisper_ggml_plus/ios`
+    [!] No podspec found for `whisper_ggml_plus` in `.symlinks/plugins/whisper_ggml_plus/ios`
+
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/external_sources/path_source.rb:14:in 'block in Pod::ExternalSources::PathSource#fetch'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/user_interface.rb:64:in 'Pod::UserInterface.section'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/external_sources/path_source.rb:11:in 'Pod::ExternalSources::PathSource#fetch'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer/analyzer.rb:997:in 'Pod::Installer::Analyzer#fetch_external_source'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer/analyzer.rb:976:in 'block (2 levels) in Pod::Installer::Analyzer#fetch_external_sources'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer/analyzer.rb:975:in 'Array#each'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer/analyzer.rb:975:in 'block in Pod::Installer::Analyzer#fetch_external_sources'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/user_interface.rb:64:in 'Pod::UserInterface.section'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer/analyzer.rb:974:in 'Pod::Installer::Analyzer#fetch_external_sources'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer/analyzer.rb:118:in 'Pod::Installer::Analyzer#analyze'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer.rb:422:in 'Pod::Installer#analyze'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer.rb:244:in 'block in Pod::Installer#resolve_dependencies'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/user_interface.rb:64:in 'Pod::UserInterface.section'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer.rb:243:in 'Pod::Installer#resolve_dependencies'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/installer.rb:162:in 'Pod::Installer#install!'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/command/install.rb:52:in 'Pod::Command::Install#run'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/claide-1.1.0/lib/claide/command.rb:334:in 'CLAide::Command.run'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/lib/cocoapods/command.rb:52:in 'Pod::Command.run'
+    /opt/homebrew/lib/ruby/gems/3.4.0/gems/cocoapods-1.17.0/bin/pod:55:in '<top (required)>'
+    /opt/homebrew/lib/ruby/site_ruby/3.4.0/rubygems.rb:305:in 'Kernel#load'
+    /opt/homebrew/lib/ruby/site_ruby/3.4.0/rubygems.rb:305:in 'Gem.activate_and_load_bin_path'
+    /opt/homebrew/lib/ruby/gems/3.4.0/bin/pod:25:in '<main>'
+
+Error running pod install
