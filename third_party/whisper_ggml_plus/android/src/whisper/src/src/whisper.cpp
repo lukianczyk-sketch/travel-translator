@@ -4102,6 +4102,18 @@ int whisper_lang_auto_detect(
     return whisper_lang_auto_detect_with_state(ctx, ctx->state, offset_ms, n_threads, lang_probs);
 }
 
+int whisper_lang_auto_detect_ctx(
+        struct whisper_context * ctx,
+                           int   offset_ms,
+                           int   n_threads,
+                           int   audio_ctx,
+                         float * lang_probs) {
+    // Same as whisper_lang_auto_detect, but with a reduced encoder window so
+    // short clips detect quickly (mel must already be computed).
+    ctx->state->exp_n_audio_ctx = audio_ctx;
+    return whisper_lang_auto_detect_with_state(ctx, ctx->state, offset_ms, n_threads, lang_probs);
+}
+
 int whisper_model_n_vocab(struct whisper_context * ctx) {
     return ctx->model.hparams.n_vocab;
 }

@@ -121,11 +121,17 @@ class Whisper {
     required TranscribeRequest transcribeRequest,
     required String modelPath,
     int audioCtx = 0,
+    List<String> allowedLangs = const [],
   }) async {
     final TranscribeRequest resolvedRequest = await resolveVadModelPath(transcribeRequest);
     final dto = TranscribeRequestDto.fromTranscribeRequest(resolvedRequest, modelPath);
     final Map<String, dynamic> result = await _request(
-      whisperRequest: _RawRequest({...dto.toJson(), '@type': dto.specialType, 'audio_ctx': audioCtx}),
+      whisperRequest: _RawRequest({
+        ...dto.toJson(),
+        '@type': dto.specialType,
+        'audio_ctx': audioCtx,
+        'allowed_langs': allowedLangs.join(','),
+      }),
     );
     if (result['text'] == null) {
       throw Exception(result['message']);

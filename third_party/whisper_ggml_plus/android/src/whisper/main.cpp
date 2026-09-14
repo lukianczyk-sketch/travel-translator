@@ -10,6 +10,7 @@
 #include <fstream>
 #include <cstdio>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include <mutex>
@@ -48,6 +49,7 @@ struct whisper_params
     bool print_special_tokens = false;
     bool speed_up = false;
     int audio_ctx = 0; // 0 = full 30 s window; else mel frames (50 per second)
+    std::string allowed_langs; // comma list, e.g. "en,pl": restrict auto-detect to these
     bool translate = false;
     bool diarize = false;
     bool no_fallback = false;
@@ -140,7 +142,9 @@ json transcribe(json jsonBody)
     params.split_on_word = jsonBody["split_on_word"];
     params.diarize = jsonBody["diarize"];
     params.speed_up = jsonBody["speed_up"];
+    params.no_fallback = jsonBody.value("no_fallback", false);
     params.audio_ctx = jsonBody.value("audio_ctx", 0);
+    params.allowed_langs = jsonBody.value("allowed_langs", std::string(""));
     params.vad_mode = parse_vad_mode(jsonBody);
     params.vad_model_path = jsonBody.value("vad_model_path", std::string(""));
 
@@ -248,6 +252,35 @@ json transcribe(json jsonBody)
                         wparams.n_threads, params.speed_up, wparams.no_timestamps, wparams.single_segment, wparams.split_on_word, wparams.max_len);
 
     auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Optional: restrict language auto-detect to the languages in play.
+    std::string chosen_lang;
+    if (params.language == "auto" && !params.allowed_langs.empty()) {
+        if (whisper_pcm_to_mel(g_ctx, pcmf32.data(), pcmf32.size(), wparams.n_threads) == 0) {
+            std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
+            const int det = whisper_lang_auto_detect_ctx(g_ctx, 0, wparams.n_threads,
+                                                         wparams.audio_ctx, probs.data());
+            if (det >= 0) {
+                int best_id = -1; float best_p = -1.0f;
+                std::stringstream ss(params.allowed_langs);
+                std::string tok;
+                while (std::getline(ss, tok, ',')) {
+                    const int id = whisper_lang_id(tok.c_str());
+                    if (id >= 0 && probs[id] > best_p) { best_p = probs[id]; best_id = id; }
+                }
+                if (best_id >= 0) {
+                    chosen_lang = whisper_lang_str(best_id);
+                    wparams.language = chosen_lang.c_str();
+                    wparams.detect_language = false;
+                    jsonResult["language_prob"] = best_p;
+                }
+            }
+        }
+    }
+    if (params.no_fallback) {
+        wparams.temperature_inc = 0.0f; // one pass, no retries
+    }
+    wparams.max_tokens = 96; // a sentence, not a runaway loop
 
     if (whisper_full(g_ctx, wparams, pcmf32.data(), pcmf32.size()) != 0)
     {

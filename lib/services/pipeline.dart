@@ -146,7 +146,7 @@ class Pipeline extends ChangeNotifier {
     await writeWav(pcm, path);
     Heard heard;
     try {
-      heard = await _stt!.transcribe(path, seconds: seconds);
+      heard = await _stt!.transcribe(path, seconds: seconds, allowedLangs: ['en', ...others.map((l) => l.code)]);
     } catch (e) {
       _log('ERROR whisper: $e');
       turn = Turn.listening;
@@ -156,7 +156,7 @@ class Pipeline extends ChangeNotifier {
     }
     final t1 = DateTime.now();
     final text = SpeechToText.collapseRepeats(heard.text);
-    _log('whisper (${heard.lang}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
+    _log('whisper (${heard.lang}${heard.langProb != null ? ' ${(heard.langProb! * 100).toStringAsFixed(0)}%' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
     if (SpeechToText.looksLikeNoise(text)) {
       _log('ignored as noise');
       turn = Turn.listening;

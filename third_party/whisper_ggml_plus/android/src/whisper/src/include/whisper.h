@@ -381,6 +381,14 @@ extern "C" {
                                int   n_threads,
                              float * lang_probs);
 
+    // Same, with a reduced encoder window (audio_ctx) for short clips.
+    WHISPER_API int whisper_lang_auto_detect_ctx(
+            struct whisper_context * ctx,
+                               int   offset_ms,
+                               int   n_threads,
+                               int   audio_ctx,
+                             float * lang_probs);
+
     WHISPER_API int whisper_lang_auto_detect_with_state(
             struct whisper_context * ctx,
               struct whisper_state * state,

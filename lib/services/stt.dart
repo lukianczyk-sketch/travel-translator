@@ -6,7 +6,8 @@ import 'package:whisper_ggml_plus/whisper_ggml_plus.dart';
 class Heard {
   final String text;
   final String lang; // ISO 639-1 from Whisper ('en', 'pl', ...)
-  const Heard(this.text, this.lang);
+  final double? langProb;
+  const Heard(this.text, this.lang, [this.langProb]);
 }
 
 /// Whisper (small) through whisper.cpp, on sentence-sized audio only.
@@ -30,7 +31,7 @@ class SpeechToText {
 
   /// [seconds] = length of the clip; the audio window is sized to it so
   /// Whisper doesn't pad every sentence out to 30 s.
-  Future<Heard> transcribe(String wavPath, {required double seconds}) async {
+  Future<Heard> transcribe(String wavPath, {required double seconds, List<String> allowedLangs = const []}) async {
     // 50 mel frames per second; keep a margin and a sane floor.
     final ctx = ((seconds + 1.0) * 50).clamp(160, 1500).round();
     final res = await _whisper.transcribeRaw(
@@ -41,11 +42,14 @@ class SpeechToText {
         isNoTimestamps: true,
         vadMode: WhisperVadMode.disabled,
         vadModelPath: vadModelPath,
+        noFallback: true,
       ),
       modelPath: modelPath,
       audioCtx: ctx,
+      allowedLangs: allowedLangs,
     );
-    return Heard((res['text'] as String? ?? '').trim(), (res['language'] as String? ?? 'en').toLowerCase());
+    return Heard((res['text'] as String? ?? '').trim(), (res['language'] as String? ?? 'en').toLowerCase(),
+        (res['language_prob'] as num?)?.toDouble());
   }
 
   Future<void> dispose() async {
