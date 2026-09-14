@@ -63,14 +63,31 @@ class Listener {
     _context = Float32List(context);
     _reset();
 
-    final stream = await _rec.startStream(const RecordConfig(
+    // Always use the phone's own microphone: Bluetooth headset mics are
+    // narrow phone-call quality and confuse the recognizer. Earbuds stay
+    // for listening only.
+    InputDevice? builtIn;
+    try {
+      final devs = await _rec.listInputDevices();
+      Diag.instance.log('mic devices: ${devs.map((d) => d.label).join(' | ')}');
+      for (final d in devs) {
+        final l = d.label.toLowerCase();
+        if (l.contains('bluetooth') || l.contains('ble') || l.contains('headset') || l.contains('usb')) continue;
+        builtIn = d;
+        if (l.contains('built') || l.contains('mic')) break;
+      }
+    } catch (_) {}
+    final stream = await _rec.startStream(RecordConfig(
       encoder: AudioEncoder.pcm16bits,
       sampleRate: sampleRate,
       numChannels: 1,
       autoGain: true,
       echoCancel: true,
       noiseSuppress: true,
+      device: builtIn,
+      androidConfig: const AndroidRecordConfig(manageBluetooth: false),
     ));
+    Diag.instance.log('mic: using ${builtIn?.label ?? 'default'} (bluetooth mic off)');
     _sub = stream.listen(_onAudio);
   }
 

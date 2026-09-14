@@ -68,14 +68,55 @@ class SpeechToText {
     return false;
   }
 
-  static String collapseRepeats(String t) {
-    final parts = t.split(RegExp(r'(?<=[.!?。！？])\s+')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    final out = <String>[];
-    for (final p in parts) {
-      if (out.isEmpty || out.last.toLowerCase() != p.toLowerCase()) out.add(p);
+  /// Strip [MUSIC]-style tags, collapse stutter loops, drop junk.
+  static String clean(String raw) {
+    var t = raw.replaceAll(RegExp(r'[\[\(][^\]\)]{0,40}[\]\)]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    // Collapse repeated phrases (1–5 words) that loop.
+    final words = t.split(' ');
+    for (var n = 1; n <= 5; n++) {
+      final out = <String>[];
+      var i = 0;
+      while (i < words.length) {
+        out.addAll(words.sublist(i, (i + n).clamp(0, words.length)));
+        var j = i + n;
+        var reps = 0;
+        while (j + n <= words.length && _same(words, i, j, n)) {
+          reps++;
+          j += n;
+        }
+        i = reps > 0 ? j : i + n;
+      }
+      words
+        ..clear()
+        ..addAll(out);
     }
-    return out.join(' ');
+    t = words.join(' ').trim();
+    // Repeated sentences.
+    final parts = t.split(RegExp(r'(?<=[.!?。！？,])\s+')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final kept = <String>[];
+    for (final p in parts) {
+      if (kept.isEmpty || kept.last.toLowerCase() != p.toLowerCase()) kept.add(p);
+    }
+    return kept.join(' ');
   }
+
+  static bool _same(List<String> w, int a, int b, int n) {
+    for (var k = 0; k < n; k++) {
+      if (w[a + k].toLowerCase() != w[b + k].toLowerCase()) return false;
+    }
+    return true;
+  }
+
+  /// True if the clean text is too short/uncertain to be worth speaking.
+  static bool isFragment(String t, double? langProb) {
+    final letters = t.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
+    if (letters.length < 3) return true;
+    final wordCount = t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    if (wordCount == 1 && (langProb ?? 1) < 0.5) return true;
+    return false;
+  }
+
+  static String collapseRepeats(String t) => clean(t);
 }
 
 /// A short silent WAV used to warm up Whisper.

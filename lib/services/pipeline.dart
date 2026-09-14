@@ -157,8 +157,8 @@ class Pipeline extends ChangeNotifier {
     final t1 = DateTime.now();
     final text = SpeechToText.collapseRepeats(heard.text);
     _log('whisper (${heard.lang}${heard.langProb != null ? ' ${(heard.langProb! * 100).toStringAsFixed(0)}%' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
-    if (SpeechToText.looksLikeNoise(text)) {
-      _log('ignored as noise');
+    if (SpeechToText.looksLikeNoise(text) || SpeechToText.isFragment(text, heard.langProb)) {
+      _log('ignored (noise/fragment)');
       turn = Turn.listening;
       status = 'Listening';
       notifyListeners();
@@ -166,6 +166,14 @@ class Pipeline extends ChangeNotifier {
     }
     // Direction: Whisper's language, checked against the languages in play.
     var fromThem = heard.lang != 'en';
+    if ((heard.langProb ?? 1) < 0.4 && others.length == 1) {
+      final spelling = !LangGuess.isEnglish(text, other);
+      if (spelling != fromThem) {
+        _log('low confidence (${((heard.langProb ?? 0) * 100).toStringAsFixed(0)}%): spelling says ${spelling ? other.code : 'en'}');
+        fromThem = spelling;
+        if (fromThem) other = others.first;
+      }
+    }
     if (fromThem) {
       final match = others.where((l) => l.code == heard.lang || (heard.lang == 'no' && l.code == 'no'));
       if (match.isNotEmpty) {
