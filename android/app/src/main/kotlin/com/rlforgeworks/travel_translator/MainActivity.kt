@@ -47,6 +47,7 @@ class MainActivity : FlutterActivity() {
     private var currentLang: String? = null
     private var restartPending = false
     private var busyCount = 0
+    private var quietCount = 0
     private val translators = HashMap<String, Translator>()
     private var player: MediaPlayer? = null
 
@@ -72,6 +73,8 @@ class MainActivity : FlutterActivity() {
                     primary = call.argument<String>("primary") ?: l.first()
                     currentLang = null
                     busyCount = 0
+                    quietCount = 0
+                    resetAudioPath()
                     // Always begin with a fresh recognizer.
                     main.post {
                         try { recognizer?.cancel(); recognizer?.destroy() } catch (_: Exception) {}
@@ -87,9 +90,10 @@ class MainActivity : FlutterActivity() {
                     val p = call.argument<String>("primary")
                     if (p != null) primary = p
                     if (!listening) {
-                        // Make sure the previous session is fully torn down before starting again.
+                        // Tear down the previous session and give the audio path a moment to settle.
+                        resetAudioPath()
                         main.post { try { recognizer?.cancel() } catch (_: Exception) {} }
-                        main.postDelayed({ startListening() }, 250)
+                        main.postDelayed({ startListening() }, 450)
                     }
                     result.success(true)
                 }
@@ -223,8 +227,27 @@ class MainActivity : FlutterActivity() {
     }
 
     // ---------------- audio playback with speaker routing ----------------
-    private fun playFile(path: String, speaker: Boolean, result: MethodChannel.Result) {
+    private fun externalOutputConnected(am: AudioManager): Boolean {
+        val devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        return devs.any {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+            it.type == AudioDeviceInfo.TYPE_USB_HEADSET || (Build.VERSION.SDK_INT >= 31 && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+        }
+    }
+
+    private fun resetAudioPath() {
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        try {
+            if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else am.setSpeakerphoneOn(false)
+            am.mode = AudioManager.MODE_NORMAL
+        } catch (_: Exception) {}
+    }
+
+    private fun playFile(path: String, forceSpeaker: Boolean, result: MethodChannel.Result) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        // Speaker is already the default unless something external is connected.
+        val speaker = forceSpeaker && externalOutputConnected(am)
         try { player?.release() } catch (_: Exception) {}
         val mp = MediaPlayer()
         player = mp
@@ -308,8 +331,14 @@ class MainActivity : FlutterActivity() {
         override fun onEndOfSpeech() { send(mapOf("type" to "speech", "on" to false)) }
         override fun onError(error: Int) {
             if (!listening) return // we cancelled on purpose (phone is talking)
-            // 7 = no match, 6 = speech timeout: just keep listening.
-            if (error != 7 && error != 6) send(mapOf("type" to "error", "code" to error, "message" to "recognizer error $error"))
+            // 7 = no match, 6 = speech timeout: keep listening, but don't hammer.
+            if (error == 6 || error == 7) {
+                quietCount++
+                if (quietCount % 5 == 0) send(mapOf("type" to "error", "code" to error, "message" to "recognizer restarted ${quietCount}x with nothing heard"))
+                scheduleRestart(if (quietCount > 3) 700 else 200)
+                return
+            }
+            send(mapOf("type" to "error", "code" to error, "message" to "recognizer error $error"))
             if (error == 9) { listening = false; return } // insufficient permissions
             if (error == 8) { // recognizer busy: cancel, and after repeats rebuild it
                 busyCount++
@@ -328,10 +357,10 @@ class MainActivity : FlutterActivity() {
             busyCount = 0
             scheduleRestart(150)
         }
-        override fun onResults(results: Bundle?) { busyCount = 0; emitResults(results, true); scheduleRestart(50) }
+        override fun onResults(results: Bundle?) { busyCount = 0; quietCount = 0; emitResults(results, true); scheduleRestart(50) }
         override fun onPartialResults(partialResults: Bundle?) { emitResults(partialResults, false) }
         override fun onEvent(eventType: Int, params: Bundle?) {}
-        override fun onSegmentResults(segmentResults: Bundle) { emitResults(segmentResults, true) }
+        override fun onSegmentResults(segmentResults: Bundle) { quietCount = 0; emitResults(segmentResults, true) }
         override fun onEndOfSegmentedSession() { scheduleRestart(50) }
         override fun onLanguageDetection(results: Bundle) {
             if (Build.VERSION.SDK_INT >= 34) {

@@ -121,6 +121,10 @@ class Pipeline extends ChangeNotifier {
           if (_busyErrors == 1 || _busyErrors % 5 == 0) _log('recognizer busy (x$_busyErrors) — resetting');
           return;
         }
+        if (e.data['code'] == 6 || e.data['code'] == 7) {
+          _log('note: ${e.data['message']}');
+          return;
+        }
         _log('ERROR recognizer: ${e.data['message']}');
         status = 'Ears: ${e.data['message']}';
         notifyListeners();
