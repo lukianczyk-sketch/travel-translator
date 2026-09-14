@@ -186,16 +186,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun recognizeAudio(pcm: ByteArray, languages: List<String>): Map<String, Any?> {
-        val results = ArrayList<Map<String, Any?>>()
+        val results = java.util.Collections.synchronizedList(ArrayList<Map<String, Any?>>())
         withChimesMuted {
-            for (lang in languages) {
-                results.add(recognizeOnce(pcm, lang))
-            }
+            // All languages at once, each on its own recognizer + pipe.
+            val threads = languages.map { lang -> Thread { results.add(recognizeOnce(pcm, lang)) } }
+            threads.forEach { it.start() }
+            threads.forEach { it.join(20000) }
         }
-        // Pick the language whose recognizer was most confident; ties → longer text.
         val best = results.filter { (it["text"] as? String)?.isNotBlank() == true }
             .maxWithOrNull(compareBy<Map<String, Any?>>({ (it["confidence"] as? Double) ?: 0.0 }, { ((it["text"] as? String) ?: "").length }))
-        return mapOf("best" to best, "all" to results)
+        return mapOf("best" to best, "all" to ArrayList(results))
     }
 
     private fun recognizeOnce(pcm: ByteArray, lang: String): Map<String, Any?> {
@@ -241,14 +241,28 @@ class MainActivity : FlutterActivity() {
             i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16000)
             try { r.startListening(i) } catch (e: Exception) { err = -1; latch.countDown() }
         }
-        // Feed the audio, then close so the recognizer finalizes.
+        // Feed the audio at roughly talking speed (the recognizer endpoints like a
+        // live mic), with a little silence before and after so it can finalize.
         Thread {
             try {
-                FileOutputStream(writeSide.fileDescriptor).use { it.write(pcm); it.flush() }
+                FileOutputStream(writeSide.fileDescriptor).use { out ->
+                    val silence = ByteArray(3200) // 100 ms at 16 kHz mono 16-bit
+                    repeat(3) { out.write(silence) }
+                    var off = 0
+                    val chunk = 3200
+                    while (off < pcm.size) {
+                        val n = minOf(chunk, pcm.size - off)
+                        out.write(pcm, off, n)
+                        off += n
+                        Thread.sleep(45) // ~2x real time
+                    }
+                    repeat(12) { out.write(silence); Thread.sleep(45) } // 1.2 s tail
+                    out.flush()
+                }
             } catch (_: Exception) {}
             try { writeSide.close() } catch (_: Exception) {}
         }.start()
-        latch.await(15, TimeUnit.SECONDS)
+        latch.await(20, TimeUnit.SECONDS)
         try { readSide.close() } catch (_: Exception) {}
         return mapOf("lang" to lang, "text" to text, "confidence" to conf, "error" to err,
             "ms" to (System.currentTimeMillis() - t0))
