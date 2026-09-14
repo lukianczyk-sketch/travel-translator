@@ -71,7 +71,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                       : themLast?.translated ?? (_pipe.ready ? 'Waiting for someone to speak…' : _pipe.status),
                   scale: big,
                   top: true,
-                  listening: _pipe.ready && _pipe.expectThem,
+                  listening: false,
                 ),
                 ),
               ),
@@ -101,7 +101,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                   translated: liveYou != null ? '…' : youLast?.translated ?? 'Your words will appear here in ${lang.name}.',
                   scale: big,
                   top: false,
-                  listening: _pipe.ready && !_pipe.expectThem,
+                  listening: false,
                 ),
                 ),
               ),
@@ -234,7 +234,7 @@ class _StatusBar extends StatelessWidget {
     };
     final lat = pipe.lastLatency;
     final sub = showLatency && lat != null
-        ? 'translate ${_s(lat.translateMs)} · to voice ${_s(lat.totalMs)}'
+        ? 'hear ${_s(lat.hearMs)} · translate ${_s(lat.translateMs)} · total ${_s(lat.totalMs)}'
         : pipe.status;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),

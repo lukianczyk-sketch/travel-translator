@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -59,6 +60,27 @@ class NativeStt {
       return r?.map((k, v) => MapEntry(k.toString(), v)) ?? {'supported': false};
     } catch (e) {
       return {'supported': false, 'error': e.toString()};
+    }
+  }
+
+  /// Recognize one utterance (16 kHz mono PCM16 bytes) in each of [languages];
+  /// returns the most confident result: {text, lang, confidence} or null.
+  static Future<Map<String, dynamic>?> recognizeAudio(Uint8List pcm, List<String> languages) async {
+    final r = await _m.invokeMethod<Map<dynamic, dynamic>>('recognizeAudio', {'pcm': pcm, 'languages': languages});
+    if (r == null) return null;
+    final all = (r['all'] as List?)?.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v))).toList();
+    final best = r['best'] as Map?;
+    return {
+      'best': best?.map((k, v) => MapEntry(k.toString(), v)),
+      'all': all,
+    };
+  }
+
+  static Future<bool> hasExternalOutput() async {
+    try {
+      return await _m.invokeMethod<bool>('hasExternalOutput') ?? false;
+    } catch (_) {
+      return false;
     }
   }
 

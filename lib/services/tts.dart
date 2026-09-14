@@ -61,7 +61,7 @@ class Speaker {
     if (text.trim().isEmpty) return;
     await init();
     await _tts.setLanguage(locale);
-    if (forceSpeaker && NativeStt.isSupportedPlatform) {
+    if (forceSpeaker && NativeStt.isSupportedPlatform && await NativeStt.hasExternalOutput()) {
       final ok = await _sayViaSpeaker(text);
       if (ok) return;
     }

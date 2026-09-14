@@ -10,6 +10,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelFileDescriptor
+import java.io.FileOutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import android.speech.ModelDownloadListener
 import android.speech.RecognitionListener
 import android.speech.RecognitionSupport
@@ -100,6 +104,16 @@ class MainActivity : FlutterActivity() {
                 "checkSupport" -> checkSupport(call.argument<List<String>>("languages") ?: listOf(), result)
                 "download" -> download(call.argument<String>("language") ?: "en-US", result)
                 "logcat" -> result.success(readLogcat())
+                "hasExternalOutput" -> result.success(externalOutputConnected(getSystemService(Context.AUDIO_SERVICE) as AudioManager))
+                "recognizeAudio" -> {
+                    val pcm = call.argument<ByteArray>("pcm") ?: ByteArray(0)
+                    @Suppress("UNCHECKED_CAST")
+                    val ls = call.argument<List<String>>("languages") ?: listOf("en-US")
+                    executor.execute {
+                        val out = recognizeAudio(pcm, ls)
+                        main.post { result.success(out) }
+                    }
+                }
                 "play" -> playFile(call.argument<String>("path") ?: "", call.argument<Boolean>("speaker") ?: true, result)
                 "stopPlay" -> { stopPlayback(); result.success(true) }
                 else -> result.notImplemented()
@@ -152,6 +166,74 @@ class MainActivity : FlutterActivity() {
                 result.error("mt", e.toString(), null)
             }
         }
+    }
+
+    // ---------------- file-based recognition (no mic, no beeps) ----------------
+    private fun recognizeAudio(pcm: ByteArray, languages: List<String>): Map<String, Any?> {
+        val results = ArrayList<Map<String, Any?>>()
+        for (lang in languages) {
+            results.add(recognizeOnce(pcm, lang))
+        }
+        // Pick the language whose recognizer was most confident; ties → longer text.
+        val best = results.filter { (it["text"] as? String)?.isNotBlank() == true }
+            .maxWithOrNull(compareBy<Map<String, Any?>>({ (it["confidence"] as? Double) ?: 0.0 }, { ((it["text"] as? String) ?: "").length }))
+        return mapOf("best" to best, "all" to results)
+    }
+
+    private fun recognizeOnce(pcm: ByteArray, lang: String): Map<String, Any?> {
+        val latch = CountDownLatch(1)
+        var text = ""
+        var conf = 0.0
+        var err: Int? = null
+        val pipe = try { ParcelFileDescriptor.createPipe() } catch (e: Exception) {
+            return mapOf("lang" to lang, "text" to "", "confidence" to 0.0, "error" to "pipe: $e")
+        }
+        val readSide = pipe[0]
+        val writeSide = pipe[1]
+        val t0 = System.currentTimeMillis()
+        main.post {
+            val r = if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this))
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(this) else SpeechRecognizer.createSpeechRecognizer(this)
+            r.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(error: Int) { err = error; latch.countDown(); try { r.destroy() } catch (_: Exception) {} }
+                override fun onResults(results: Bundle?) {
+                    val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val scores = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
+                    text = list?.firstOrNull() ?: ""
+                    conf = if (scores != null && scores.isNotEmpty()) scores[0].toDouble() else (if (text.isNotBlank()) 0.5 else 0.0)
+                    latch.countDown()
+                    try { r.destroy() } catch (_: Exception) {}
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, readSide)
+            i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+            i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+            i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16000)
+            try { r.startListening(i) } catch (e: Exception) { err = -1; latch.countDown() }
+        }
+        // Feed the audio, then close so the recognizer finalizes.
+        Thread {
+            try {
+                FileOutputStream(writeSide.fileDescriptor).use { it.write(pcm); it.flush() }
+            } catch (_: Exception) {}
+            try { writeSide.close() } catch (_: Exception) {}
+        }.start()
+        latch.await(15, TimeUnit.SECONDS)
+        try { readSide.close() } catch (_: Exception) {}
+        return mapOf("lang" to lang, "text" to text, "confidence" to conf, "error" to err,
+            "ms" to (System.currentTimeMillis() - t0))
     }
 
     private fun mlLang(code: String): String? = TranslateLanguage.fromLanguageTag(code)
