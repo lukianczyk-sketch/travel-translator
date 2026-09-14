@@ -169,10 +169,28 @@ class MainActivity : FlutterActivity() {
     }
 
     // ---------------- file-based recognition (no mic, no beeps) ----------------
+    private val chimeStreams = intArrayOf(AudioManager.STREAM_MUSIC, AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION)
+
+    /** Silence the recognizer's start/stop chimes while it runs on our audio. */
+    private fun withChimesMuted(block: () -> Unit) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val muted = ArrayList<Int>()
+        for (st in chimeStreams) {
+            try {
+                if (!am.isStreamMute(st)) { am.adjustStreamVolume(st, AudioManager.ADJUST_MUTE, 0); muted.add(st) }
+            } catch (_: Exception) {}
+        }
+        try { block() } finally {
+            for (st in muted) { try { am.adjustStreamVolume(st, AudioManager.ADJUST_UNMUTE, 0) } catch (_: Exception) {} }
+        }
+    }
+
     private fun recognizeAudio(pcm: ByteArray, languages: List<String>): Map<String, Any?> {
         val results = ArrayList<Map<String, Any?>>()
-        for (lang in languages) {
-            results.add(recognizeOnce(pcm, lang))
+        withChimesMuted {
+            for (lang in languages) {
+                results.add(recognizeOnce(pcm, lang))
+            }
         }
         // Pick the language whose recognizer was most confident; ties → longer text.
         val best = results.filter { (it["text"] as? String)?.isNotBlank() == true }
