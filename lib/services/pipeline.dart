@@ -11,6 +11,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/language.dart';
 import 'book_store.dart';
 import 'diag.dart';
+import 'glossary.dart';
 import 'lang_guess.dart';
 import 'listener.dart';
 import 'model_manager.dart';
@@ -157,6 +158,19 @@ class Pipeline extends ChangeNotifier {
       return;
     }
     final t1 = DateTime.now();
+    // The winning decode may be a bracketed "[blank]" tag that cleans to
+    // nothing — if so, fall back to the best decode that has real words.
+    if (heard.candidates.length > 1) {
+      final live = heard.candidates.where((c) => !SpeechToText.looksLikeNoise(SpeechToText.collapseRepeats(c.text))).toList();
+      if (live.isNotEmpty) {
+        live.sort((a, b) => b.score.compareTo(a.score));
+        if (live.first.lang != heard.lang || live.first.text != heard.text) {
+          _log('  winner "${heard.text}" cleans to nothing → using ${live.first.lang} decode');
+          heard = Heard(live.first.text, live.first.lang, heard.langProb, live.first.logprob,
+              live.length > 1 ? live.first.score - live[1].score : heard.margin, heard.candidates);
+        }
+      }
+    }
     final text = SpeechToText.collapseRepeats(heard.text);
     final conf = (heard.confidence * 100).toStringAsFixed(0);
     _log('whisper (${heard.lang} ${conf}%${heard.margin != null ? ', margin ${heard.margin!.toStringAsFixed(2)}' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
@@ -196,8 +210,14 @@ class Pipeline extends ChangeNotifier {
 
     String tr;
     try {
-      tr = await ModelManager.instance.mlkit.translate(text, src, tgt);
-      _log('translated ($src→$tgt): "$tr" in ${DateTime.now().difference(t1).inMilliseconds} ms');
+      final fixed = Glossary.lookup(text, src, tgt);
+      if (fixed != null) {
+        tr = fixed;
+        _log('phrasebook ($src→$tgt): "$tr"');
+      } else {
+        tr = await ModelManager.instance.mlkit.translate(text, src, tgt);
+        _log('translated ($src→$tgt): "$tr" in ${DateTime.now().difference(t1).inMilliseconds} ms');
+      }
     } catch (e) {
       _log('ERROR translate: $e');
       tr = '[translation error]';

@@ -388,6 +388,7 @@ class MainActivity : FlutterActivity() {
         player = mp
         var done = false
         val boost = volume >= 0.99f
+        val spk = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
         fun finish(ok: Boolean) {
             if (done) return
             done = true
@@ -405,7 +406,6 @@ class MainActivity : FlutterActivity() {
             if (speaker) {
                 // Route like a speakerphone call: forces the built-in speaker even with earbuds connected.
                 am.mode = AudioManager.MODE_IN_COMMUNICATION
-                val spk = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                 if (Build.VERSION.SDK_INT >= 31) {
                     val comm = am.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                     val ok = if (comm != null) am.setCommunicationDevice(comm) else false
@@ -417,11 +417,7 @@ class MainActivity : FlutterActivity() {
                 mp.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                // Belt and braces: pin this player to the built-in speaker too.
-                if (spk != null && Build.VERSION.SDK_INT >= 28) {
-                    val pinned = mp.setPreferredDevice(spk)
-                    route.append(" preferred=").append(pinned)
-                }
+
             } else {
                 mp.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -433,11 +429,17 @@ class MainActivity : FlutterActivity() {
             mp.setOnCompletionListener { finish(true) }
             mp.setOnErrorListener { _, _, _ -> finish(false); true }
             mp.setOnPreparedListener {
+                // Pin this player to the built-in speaker (only valid once prepared).
+                if (speaker && spk != null && Build.VERSION.SDK_INT >= 28) {
+                    try { route.append(" preferred=").append(it.setPreferredDevice(spk)) } catch (_: Exception) {}
+                }
                 it.start()
-                if (Build.VERSION.SDK_INT >= 28) try {
-                    val dev = it.routedDevice
-                    route.append(" out=").append(dev?.productName ?: "?").append("/type").append(dev?.type ?: -1)
-                } catch (_: Exception) {}
+                if (Build.VERSION.SDK_INT >= 28) main.postDelayed({
+                    try {
+                        val dev = it.routedDevice
+                        route.append(" out=").append(dev?.productName ?: "?").append("/type").append(dev?.type ?: -1)
+                    } catch (_: Exception) {}
+                }, 400)
             }
             mp.prepareAsync()
         } catch (e: Exception) {
