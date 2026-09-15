@@ -92,12 +92,15 @@ class NativeStt {
     }
   }
 
-  /// Play a synthesized file; speaker=true forces the phone speaker even with earbuds.
-  static Future<bool> play(String path, {required bool speaker}) async {
+  /// Play a synthesized file; speaker=true forces the phone speaker even with
+  /// earbuds. Returns the route taken, or null if playback failed.
+  static Future<String?> play(String path, {required bool speaker}) async {
     try {
-      return await _m.invokeMethod<bool>('play', {'path': path, 'speaker': speaker}) ?? false;
-    } catch (_) {
-      return false;
+      final r = await _m.invokeMethod<Map>('play', {'path': path, 'speaker': speaker});
+      if (r == null || r['ok'] != true) return null;
+      return r['route']?.toString() ?? 'ok';
+    } catch (e) {
+      return null;
     }
   }
 

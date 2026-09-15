@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:whisper_ggml_plus/whisper_ggml_plus.dart';
 
@@ -6,8 +7,22 @@ import 'package:whisper_ggml_plus/whisper_ggml_plus.dart';
 class Heard {
   final String text;
   final String lang; // ISO 639-1 from Whisper ('en', 'pl', ...)
-  final double? langProb;
-  const Heard(this.text, this.lang, [this.langProb]);
+  final double? langProb; // language-ID prior (tie-break only)
+  final double? logprob; // mean token log-prob of the winning decode
+  final double? margin; // winner's score minus the runner-up's
+  final List<Candidate> candidates; // one decode per language in play
+  const Heard(this.text, this.lang, [this.langProb, this.logprob, this.margin, this.candidates = const []]);
+
+  /// 0..1 confidence in the words themselves (not the language guess).
+  double get confidence => logprob == null ? 1 : math.exp(logprob!).clamp(0, 1).toDouble();
+}
+
+class Candidate {
+  final String lang;
+  final String text;
+  final double logprob;
+  final double score;
+  const Candidate(this.lang, this.text, this.logprob, this.score);
 }
 
 /// Whisper (small) through whisper.cpp, on sentence-sized audio only.
@@ -48,8 +63,20 @@ class SpeechToText {
       audioCtx: ctx,
       allowedLangs: allowedLangs,
     );
-    return Heard((res['text'] as String? ?? '').trim(), (res['language'] as String? ?? 'en').toLowerCase(),
-        (res['language_prob'] as num?)?.toDouble());
+    final cands = <Candidate>[];
+    for (final c in (res['candidates'] as List? ?? const [])) {
+      final m = c as Map;
+      cands.add(Candidate((m['lang'] as String? ?? '?').toLowerCase(), (m['text'] as String? ?? '').trim(),
+          (m['logprob'] as num?)?.toDouble() ?? 0, (m['score'] as num?)?.toDouble() ?? 0));
+    }
+    return Heard(
+      (res['text'] as String? ?? '').trim(),
+      (res['language'] as String? ?? 'en').toLowerCase(),
+      (res['language_prob'] as num?)?.toDouble(),
+      (res['logprob'] as num?)?.toDouble(),
+      (res['margin'] as num?)?.toDouble(),
+      cands,
+    );
   }
 
   Future<void> dispose() async {
@@ -108,11 +135,12 @@ class SpeechToText {
   }
 
   /// True if the clean text is too short/uncertain to be worth speaking.
-  static bool isFragment(String t, double? langProb) {
+  /// [confidence] is how sure Whisper was of the words (0..1).
+  static bool isFragment(String t, double? confidence) {
     final letters = t.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
     if (letters.length < 3) return true;
     final wordCount = t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-    if (wordCount == 1 && (langProb ?? 1) < 0.5) return true;
+    if (wordCount == 1 && (confidence ?? 1) < 0.5) return true;
     return false;
   }
 

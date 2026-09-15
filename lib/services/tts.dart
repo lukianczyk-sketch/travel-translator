@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'diag.dart';
 import 'native_stt.dart';
 
 /// Phone's built-in voices. Plays to whatever the phone is routed to
@@ -61,9 +62,15 @@ class Speaker {
     if (text.trim().isEmpty) return;
     await init();
     await _tts.setLanguage(locale);
-    if (forceSpeaker && NativeStt.isSupportedPlatform && await NativeStt.hasExternalOutput()) {
-      final ok = await _sayViaSpeaker(text);
-      if (ok) return;
+    if (forceSpeaker && NativeStt.isSupportedPlatform) {
+      if (await NativeStt.hasExternalOutput()) {
+        final route = await _sayViaSpeaker(text);
+        if (route != null) {
+          Diag.instance.log('voice → phone speaker ($route)');
+          return;
+        }
+        Diag.instance.log('voice → speaker routing FAILED, using default output');
+      }
     }
     _done = Completer<void>();
     await _tts.speak(text);
@@ -73,16 +80,20 @@ class Speaker {
     );
   }
 
-  Future<bool> _sayViaSpeaker(String text) async {
+  Future<String?> _sayViaSpeaker(String text) async {
     try {
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/say_${DateTime.now().millisecondsSinceEpoch % 7}.wav';
       await _tts.awaitSynthCompletion(true);
       final r = await _tts.synthesizeToFile(text, path, true);
-      if (r != 1) return false;
+      if (r != 1) {
+        Diag.instance.log('voice: synthesizeToFile returned $r');
+        return null;
+      }
       return await NativeStt.play(path, speaker: true);
-    } catch (_) {
-      return false;
+    } catch (e) {
+      Diag.instance.log('voice: speaker path error $e');
+      return null;
     }
   }
 

@@ -361,7 +361,9 @@ class MainActivity : FlutterActivity() {
     private fun playFile(path: String, forceSpeaker: Boolean, result: MethodChannel.Result) {
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         // Speaker is already the default unless something external is connected.
-        val speaker = forceSpeaker && externalOutputConnected(am)
+        val external = externalOutputConnected(am)
+        val speaker = forceSpeaker && external
+        val route = StringBuilder(if (speaker) "speaker" else "default")
         try { player?.release() } catch (_: Exception) {}
         val mp = MediaPlayer()
         player = mp
@@ -376,21 +378,29 @@ class MainActivity : FlutterActivity() {
                     am.mode = AudioManager.MODE_NORMAL
                 } catch (_: Exception) {}
             }
-            main.post { result.success(ok) }
+            main.post { result.success(mapOf("ok" to ok, "route" to route.toString())) }
         }
         try {
             if (speaker) {
                 // Route like a speakerphone call: forces the built-in speaker even with earbuds connected.
                 am.mode = AudioManager.MODE_IN_COMMUNICATION
+                val spk = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                 if (Build.VERSION.SDK_INT >= 31) {
-                    val spk = am.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                    if (spk != null) am.setCommunicationDevice(spk)
+                    val comm = am.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    val ok = if (comm != null) am.setCommunicationDevice(comm) else false
+                    route.append(" commDev=").append(ok)
                 } else {
                     am.setSpeakerphoneOn(true)
+                    route.append(" speakerphone=").append(am.isSpeakerphoneOn)
                 }
                 mp.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                // Belt and braces: pin this player to the built-in speaker too.
+                if (spk != null && Build.VERSION.SDK_INT >= 28) {
+                    val pinned = mp.setPreferredDevice(spk)
+                    route.append(" preferred=").append(pinned)
+                }
             } else {
                 mp.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -399,9 +409,16 @@ class MainActivity : FlutterActivity() {
             mp.setDataSource(path)
             mp.setOnCompletionListener { finish(true) }
             mp.setOnErrorListener { _, _, _ -> finish(false); true }
-            mp.setOnPreparedListener { it.start() }
+            mp.setOnPreparedListener {
+                it.start()
+                if (Build.VERSION.SDK_INT >= 28) try {
+                    val dev = it.routedDevice
+                    route.append(" out=").append(dev?.productName ?: "?").append("/type").append(dev?.type ?: -1)
+                } catch (_: Exception) {}
+            }
             mp.prepareAsync()
         } catch (e: Exception) {
+            route.append(" err=").append(e.message)
             finish(false)
         }
     }

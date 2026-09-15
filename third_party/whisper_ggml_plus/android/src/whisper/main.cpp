@@ -6,6 +6,7 @@
 #include "src/examples/dr_wav.h"
 
 #include <cmath>
+#include <algorithm>
 #include <atomic>
 #include <fstream>
 #include <cstdio>
@@ -253,76 +254,137 @@ json transcribe(json jsonBody)
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Optional: restrict language auto-detect to the languages in play.
-    std::string chosen_lang;
-    if (params.language == "auto" && !params.allowed_langs.empty()) {
-        if (whisper_pcm_to_mel(g_ctx, pcmf32.data(), pcmf32.size(), wparams.n_threads) == 0) {
-            std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
-            const int det = whisper_lang_auto_detect_ctx(g_ctx, 0, wparams.n_threads,
-                                                         wparams.audio_ctx, probs.data());
-            if (det >= 0) {
-                int best_id = -1; float best_p = -1.0f;
-                std::stringstream ss(params.allowed_langs);
-                std::string tok;
-                while (std::getline(ss, tok, ',')) {
-                    const int id = whisper_lang_id(tok.c_str());
-                    if (id >= 0 && probs[id] > best_p) { best_p = probs[id]; best_id = id; }
-                }
-                if (best_id >= 0) {
-                    chosen_lang = whisper_lang_str(best_id);
-                    wparams.language = chosen_lang.c_str();
-                    wparams.detect_language = false;
-                    jsonResult["language_prob"] = best_p;
-                }
-            }
-        }
-    }
     if (params.no_fallback) {
         wparams.temperature_inc = 0.0f; // one pass, no retries
     }
     wparams.max_tokens = 96; // a sentence, not a runaway loop
 
-    if (whisper_full(g_ctx, wparams, pcmf32.data(), pcmf32.size()) != 0)
-    {
-        if (g_should_abort.load()) {
-            jsonResult["@type"] = "aborted";
-            jsonResult["message"] = "transcription aborted by user";
-            g_should_abort.store(false);
-            return jsonResult;
+    // Languages in play (e.g. "en,pl"). With more than one, the sentence is
+    // decoded in EVERY language and the most confident decode wins — no
+    // guessing which language was spoken (Whisper's guesser leans English).
+    std::vector<std::string> langs;
+    if (params.language == "auto" && !params.allowed_langs.empty()) {
+        std::stringstream ss(params.allowed_langs);
+        std::string tok;
+        while (std::getline(ss, tok, ',')) {
+            if (!tok.empty() && whisper_lang_id(tok.c_str()) >= 0) langs.push_back(tok);
         }
-        jsonResult["@type"] = "error";
-        jsonResult["message"] = "failed to process audio";
+    }
+
+    // Language-ID probabilities: only used when a single language is in play
+    // (with several, the per-language decodes decide — and skipping the ID
+    // pass saves an encoder run).
+    std::vector<float> lid(whisper_lang_max_id() + 1, 0.0f);
+    bool have_lid = false;
+    if (langs.size() == 1) {
+        if (whisper_pcm_to_mel(g_ctx, pcmf32.data(), pcmf32.size(), wparams.n_threads) == 0 &&
+            whisper_lang_auto_detect_ctx(g_ctx, 0, wparams.n_threads, wparams.audio_ctx, lid.data()) >= 0) {
+            have_lid = true;
+        }
+    }
+
+    auto collect = [&](std::string & text, double & logprob, int & ntok) {
+        text.clear(); logprob = 0.0; ntok = 0;
+        const int n_segments = whisper_full_n_segments(g_ctx);
+        const whisper_token eot = whisper_token_eot(g_ctx);
+        for (int i = 0; i < n_segments; ++i) {
+            text += std::string(whisper_full_get_segment_text(g_ctx, i));
+            const int nt = whisper_full_n_tokens(g_ctx, i);
+            for (int t = 0; t < nt; ++t) {
+                if (whisper_full_get_token_id(g_ctx, i, t) >= eot) continue;
+                const float p = whisper_full_get_token_p(g_ctx, i, t);
+                logprob += std::log(std::max(p, 1e-6f));
+                ntok++;
+            }
+        }
+        if (ntok > 0) logprob /= ntok;
+    };
+
+    auto run = [&]() -> bool {
+        if (whisper_full(g_ctx, wparams, pcmf32.data(), pcmf32.size()) != 0) {
+            if (g_should_abort.load()) {
+                jsonResult["@type"] = "aborted";
+                jsonResult["message"] = "transcription aborted by user";
+                g_should_abort.store(false);
+            } else {
+                jsonResult["@type"] = "error";
+                jsonResult["message"] = "failed to process audio";
+            }
+            return false;
+        }
+        return true;
+    };
+
+    if (langs.size() >= 2) {
+        struct Cand { std::string lang; std::string text; double logprob; int ntok; float lidp; double score; };
+        std::vector<Cand> cands;
+        for (size_t i = 0; i < langs.size(); ++i) {
+            wparams.language = langs[i].c_str();
+            wparams.detect_language = false;
+            if (!run()) return jsonResult;
+            Cand c; c.lang = langs[i];
+            collect(c.text, c.logprob, c.ntok);
+            c.lidp = have_lid ? lid[whisper_lang_id(langs[i].c_str())] : -1.0f;
+            std::string trimmed = c.text;
+            trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
+            c.score = trimmed.empty() ? -1e9 : c.logprob + (have_lid ? 0.35 * std::log(std::max(c.lidp, 0.001f)) : 0.0);
+            cands.push_back(c);
+        }
+        size_t best = 0;
+        for (size_t i = 1; i < cands.size(); ++i) if (cands[i].score > cands[best].score) best = i;
+        double runner = -1e9;
+        for (size_t i = 0; i < cands.size(); ++i) if (i != best && cands[i].score > runner) runner = cands[i].score;
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter", "[DEBUG] Multi-decode (%zu langs) in %lldms",
+                            langs.size(), (long long)std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+
+        std::vector<json> cj;
+        for (auto & c : cands) {
+            json j; j["lang"] = c.lang; j["text"] = c.text; j["logprob"] = c.logprob; j["tokens"] = c.ntok;
+            if (have_lid) j["lid"] = c.lidp;
+            j["score"] = c.score;
+            cj.push_back(j);
+        }
+        jsonResult["candidates"] = cj;
+        jsonResult["text"] = cands[best].text;
+        jsonResult["language"] = cands[best].lang;
+        jsonResult["logprob"] = cands[best].logprob;
+        jsonResult["margin"] = cands[best].score - runner;
+        if (have_lid) jsonResult["language_prob"] = cands[best].lidp;
         return jsonResult;
     }
 
+    // Single language (or plain auto): one decode.
+    std::string chosen_lang;
+    if (langs.size() == 1) {
+        chosen_lang = langs[0];
+        wparams.language = chosen_lang.c_str();
+        wparams.detect_language = false;
+        if (have_lid) jsonResult["language_prob"] = lid[whisper_lang_id(chosen_lang.c_str())];
+    }
+    if (!run()) return jsonResult;
+
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter", "[DEBUG] Transcription completed in %lldms", (long long)duration);
 
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter", "[DEBUG] Transcription completed in %lldms", (int)duration);
-
-    const int n_segments = whisper_full_n_segments(g_ctx);
-    std::vector<json> segmentsJson = {};
-    std::string text_result = "";
-
-    for (int i = 0; i < n_segments; ++i)
-    {
-        const char *text = whisper_full_get_segment_text(g_ctx, i);
-        text_result += std::string(text);
-        
-        if (!params.no_timestamps) {
+    std::string text_result; double lp = 0.0; int ntok = 0;
+    collect(text_result, lp, ntok);
+    if (!params.no_timestamps) {
+        std::vector<json> segmentsJson;
+        const int n_segments = whisper_full_n_segments(g_ctx);
+        for (int i = 0; i < n_segments; ++i) {
             json jsonSegment;
             jsonSegment["from_ts"] = whisper_full_get_segment_t0(g_ctx, i);
             jsonSegment["to_ts"] = whisper_full_get_segment_t1(g_ctx, i);
-            jsonSegment["text"] = text;
+            jsonSegment["text"] = whisper_full_get_segment_text(g_ctx, i);
             segmentsJson.push_back(jsonSegment);
         }
-    }
-
-    if (!params.no_timestamps) {
         jsonResult["segments"] = segmentsJson;
     }
-    
     jsonResult["text"] = text_result;
+    jsonResult["logprob"] = lp;
     jsonResult["language"] = whisper_lang_str(whisper_full_lang_id(g_ctx));
     return jsonResult;
 }

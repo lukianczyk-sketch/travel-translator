@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -79,7 +80,7 @@ class Pipeline extends ChangeNotifier {
 
   Future<void> start() async {
     final mm = ModelManager.instance;
-    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (whisper small)');
+    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (whisper small, decode in every language)');
     await WakelockPlus.enable();
     await _speaker.init();
     if (!NativeStt.isSupportedPlatform) {
@@ -156,30 +157,26 @@ class Pipeline extends ChangeNotifier {
     }
     final t1 = DateTime.now();
     final text = SpeechToText.collapseRepeats(heard.text);
-    _log('whisper (${heard.lang}${heard.langProb != null ? ' ${(heard.langProb! * 100).toStringAsFixed(0)}%' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
-    if (SpeechToText.looksLikeNoise(text) || SpeechToText.isFragment(text, heard.langProb)) {
+    final conf = (heard.confidence * 100).toStringAsFixed(0);
+    _log('whisper (${heard.lang} ${conf}%${heard.margin != null ? ', margin ${heard.margin!.toStringAsFixed(2)}' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
+    if (heard.candidates.length > 1) {
+      _log('  decodes: ${heard.candidates.map((c) => '${c.lang} ${(math.exp(c.logprob) * 100).toStringAsFixed(0)}% "${SpeechToText.collapseRepeats(c.text)}"').join(' | ')}');
+    }
+    if (SpeechToText.looksLikeNoise(text) || SpeechToText.isFragment(text, heard.confidence)) {
       _log('ignored (noise/fragment)');
       turn = Turn.listening;
       status = 'Listening';
       notifyListeners();
       return;
     }
-    // Direction: Whisper's language, checked against the languages in play.
+    // Direction: the sentence was decoded in every language in play and the
+    // most confident decode won — that decode's language IS the direction.
     var fromThem = heard.lang != 'en';
-    if ((heard.langProb ?? 1) < 0.4 && others.length == 1) {
-      final spelling = !LangGuess.isEnglish(text, other);
-      if (spelling != fromThem) {
-        _log('low confidence (${((heard.langProb ?? 0) * 100).toStringAsFixed(0)}%): spelling says ${spelling ? other.code : 'en'}');
-        fromThem = spelling;
-        if (fromThem) other = others.first;
-      }
-    }
     if (fromThem) {
-      final match = others.where((l) => l.code == heard.lang || (heard.lang == 'no' && l.code == 'no'));
+      final match = others.where((l) => l.code == heard.lang);
       if (match.isNotEmpty) {
         other = match.first;
       } else if (others.length == 1) {
-        // Whisper heard a language we're not set up for — go by spelling.
         fromThem = !LangGuess.isEnglish(text, other);
         _log('note: whisper said ${heard.lang}; using spelling → ${fromThem ? other.code : 'en'}');
       } else {
