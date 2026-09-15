@@ -50,6 +50,9 @@ class Pipeline extends ChangeNotifier {
   SpeechToText? _stt;
   int _wavSeq = 0;
 
+  /// Words below this confidence are shown as "didn't catch that", never spoken.
+  static const minConfidence = 0.35;
+
   Turn turn = Turn.listening;
   String status = 'Starting…';
   bool ready = false;
@@ -69,6 +72,7 @@ class Pipeline extends ChangeNotifier {
   bool _stopped = false;
 
   void _log(String m) => Diag.instance.log(m);
+  ModelManager get mmActive => ModelManager.instance;
 
   Future<String> _vadPath() async {
     final dir = await getApplicationSupportDirectory();
@@ -176,12 +180,22 @@ class Pipeline extends ChangeNotifier {
     final conf = (heard.confidence * 100).toStringAsFixed(0);
     _log('whisper (${heard.lang} ${conf}%${heard.margin != null ? ', margin ${heard.margin!.toStringAsFixed(2)}' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
     if (heard.candidates.length > 1) {
-      _log('  decodes: ${heard.candidates.map((c) => '${c.lang} ${(math.exp(c.logprob) * 100).toStringAsFixed(0)}% "${SpeechToText.collapseRepeats(c.text)}"').join(' | ')}');
+      _log('  decodes${heard.candidates.length > 1 && mmActive.activeEarsPlus ? ' (second look)' : ''}: ${heard.candidates.map((c) => '${c.lang} ${(math.exp(c.logprob) * 100).toStringAsFixed(0)}% "${SpeechToText.collapseRepeats(c.text)}"').join(' | ')}');
     }
     if (SpeechToText.looksLikeNoise(text) || SpeechToText.isFragment(text, heard.confidence)) {
       _log('ignored (noise/fragment)');
       turn = Turn.listening;
       status = 'Listening';
+      notifyListeners();
+      return;
+    }
+    // Never speak a guess: below this the words are more likely wrong than right.
+    if (heard.confidence < minConfidence) {
+      _log('not sure enough (${conf}%) — not speaking it');
+      final guessFromThem = heard.lang != 'en';
+      last = Exchange(guessFromThem, text, "Didn't catch that — say it again?", guessFromThem ? english.ttsLocale : other.ttsLocale);
+      turn = Turn.listening;
+      status = "Didn't catch that";
       notifyListeners();
       return;
     }

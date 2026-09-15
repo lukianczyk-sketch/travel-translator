@@ -321,16 +321,46 @@ json transcribe(json jsonBody)
         const bool ok = run();
         whisper_set_allowed_langs("");
         if (!ok) return jsonResult;
-        auto end_time = std::chrono::high_resolution_clock::now();
-        __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter", "[DEBUG] Single-pass decode in %lldms",
-                            (long long)std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
         std::string text_result; double lp = 0.0; int ntok = 0;
         collect(text_result, lp, ntok);
-        jsonResult["text"] = text_result;
-        jsonResult["logprob"] = lp;
-        jsonResult["language"] = whisper_lang_str(whisper_full_lang_id(g_ctx));
+        std::string first_lang = whisper_lang_str(whisper_full_lang_id(g_ctx));
         const float lpb = whisper_full_lang_prob(g_ctx);
+
+        // Second look: if the first decode was shaky (low token confidence or a
+        // weak language call), decode once more in every OTHER language in play
+        // and keep the most confident. Costs an extra encoder run only when unsure.
+        const bool shaky = (ntok > 0 && lp < std::log(0.45)) || (lpb >= 0 && lpb < 0.6f);
+        std::vector<json> cj;
+        {
+            json j; j["lang"] = first_lang; j["text"] = text_result; j["logprob"] = lp; j["tokens"] = ntok;
+            if (lpb >= 0) j["lid"] = lpb;
+            j["score"] = lp; cj.push_back(j);
+        }
+        std::string best_lang = first_lang, best_text = text_result; double best_lp = lp; bool looked_again = false;
+        if (shaky) {
+            for (size_t i = 0; i < langs.size(); ++i) {
+                if (langs[i] == first_lang) continue;
+                wparams.language = langs[i].c_str();
+                wparams.detect_language = false;
+                if (!run()) return jsonResult;
+                looked_again = true;
+                std::string t2; double lp2 = 0.0; int n2 = 0;
+                collect(t2, lp2, n2);
+                json j; j["lang"] = langs[i]; j["text"] = t2; j["logprob"] = lp2; j["tokens"] = n2; j["score"] = lp2;
+                cj.push_back(j);
+                std::string trimmed = t2; trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
+                if (!trimmed.empty() && n2 > 0 && lp2 > best_lp) { best_lp = lp2; best_lang = langs[i]; best_text = t2; }
+            }
+        }
+        auto end_time = std::chrono::high_resolution_clock::now();
+        __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter", "[DEBUG] Single-pass decode%s in %lldms",
+                            looked_again ? " (+second look)" : "",
+                            (long long)std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+        jsonResult["text"] = best_text;
+        jsonResult["logprob"] = best_lp;
+        jsonResult["language"] = best_lang;
         if (lpb >= 0) jsonResult["language_prob"] = lpb;
+        if (looked_again) { jsonResult["candidates"] = cj; jsonResult["second_look"] = true; }
         return jsonResult;
     }
 
