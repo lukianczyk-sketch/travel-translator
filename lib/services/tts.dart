@@ -81,15 +81,15 @@ class Speaker {
     await init();
     await _tts.setLanguage(locale);
     final vol = forceSpeaker ? speakerVolume : earVolume;
-    if (forceSpeaker && NativeStt.isSupportedPlatform) {
-      if (await NativeStt.hasExternalOutput()) {
-        final route = await _sayViaSpeaker(text, vol);
-        if (route != null) {
-          Diag.instance.log('voice → phone speaker ($route)');
-          return;
-        }
-        Diag.instance.log('voice → speaker routing FAILED, using default output');
+    if (NativeStt.isSupportedPlatform && await NativeStt.hasExternalOutput()) {
+      // Earbuds/headset connected: play through our own player so each side
+      // is pinned to the right device (yours → speaker, theirs → earbuds).
+      final route = await _sayViaNative(text, vol, speaker: forceSpeaker);
+      if (route != null) {
+        Diag.instance.log('voice → ${forceSpeaker ? 'phone speaker' : 'earbuds'} ($route)');
+        return;
       }
+      Diag.instance.log('voice → ${forceSpeaker ? 'speaker' : 'earbud'} routing FAILED, using default output');
     }
     await _tts.setVolume(vol.clamp(0.05, 1.0));
     final boost = vol >= 0.99 && NativeStt.isSupportedPlatform;
@@ -106,7 +106,7 @@ class Speaker {
     }
   }
 
-  Future<String?> _sayViaSpeaker(String text, double vol) async {
+  Future<String?> _sayViaNative(String text, double vol, {required bool speaker}) async {
     try {
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/say_${DateTime.now().millisecondsSinceEpoch % 7}.wav';
@@ -117,7 +117,7 @@ class Speaker {
         Diag.instance.log('voice: synthesizeToFile returned $r');
         return null;
       }
-      return await NativeStt.play(path, speaker: true, volume: vol);
+      return await NativeStt.play(path, speaker: speaker, volume: vol);
     } catch (e) {
       Diag.instance.log('voice: speaker path error $e');
       return null;

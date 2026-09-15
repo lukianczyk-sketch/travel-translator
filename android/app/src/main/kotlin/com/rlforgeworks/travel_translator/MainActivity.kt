@@ -352,6 +352,25 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun externalOutputDevice(am: AudioManager): AudioDeviceInfo? {
+        val devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        return devs.firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
+            ?: devs.firstOrNull { Build.VERSION.SDK_INT >= 31 && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
+            ?: devs.firstOrNull { it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
+            ?: devs.firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
+    }
+
+    /** Make sure the earbuds are back in music mode (speaker-pinning can leave Samsung in call mode). */
+    @Suppress("DEPRECATION")
+    private fun leaveCallMode(am: AudioManager) {
+        try {
+            if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else am.setSpeakerphoneOn(false)
+            if (am.isBluetoothScoOn) { am.isBluetoothScoOn = false }
+            try { am.stopBluetoothSco() } catch (_: Exception) {}
+            am.mode = AudioManager.MODE_NORMAL
+        } catch (_: Exception) {}
+    }
+
     private fun resetAudioPath() {
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         try {
@@ -394,12 +413,7 @@ class MainActivity : FlutterActivity() {
             done = true
             try { mp.release() } catch (_: Exception) {}
             if (boost) boostStream(if (speaker) "call" else "media", false)
-            if (speaker) {
-                try {
-                    if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else am.setSpeakerphoneOn(false)
-                    am.mode = AudioManager.MODE_NORMAL
-                } catch (_: Exception) {}
-            }
+            if (speaker) leaveCallMode(am)
             main.post { result.success(mapOf("ok" to ok, "route" to route.toString())) }
         }
         try {
@@ -419,9 +433,13 @@ class MainActivity : FlutterActivity() {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
 
             } else {
+                // Their side: normal media channel, pinned to the earbuds/headset if one is connected.
+                leaveCallMode(am)
                 mp.setAudioAttributes(AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                @Suppress("DEPRECATION")
+                route.append(" mode=").append(am.mode).append(" sco=").append(am.isBluetoothScoOn).append(" a2dp=").append(am.isBluetoothA2dpOn)
             }
             mp.setVolume(volume.coerceIn(0.05f, 1f), volume.coerceIn(0.05f, 1f))
             if (boost) boostStream(if (speaker) "call" else "media", true)
@@ -429,9 +447,12 @@ class MainActivity : FlutterActivity() {
             mp.setOnCompletionListener { finish(true) }
             mp.setOnErrorListener { _, _, _ -> finish(false); true }
             mp.setOnPreparedListener {
-                // Pin this player to the built-in speaker (only valid once prepared).
-                if (speaker && spk != null && Build.VERSION.SDK_INT >= 28) {
-                    try { route.append(" preferred=").append(it.setPreferredDevice(spk)) } catch (_: Exception) {}
+                // Pin this player (only valid once prepared): speaker for your side, earbuds for theirs.
+                if (Build.VERSION.SDK_INT >= 28) {
+                    val target = if (speaker) spk else externalOutputDevice(am)
+                    if (target != null) {
+                        try { route.append(" preferred=").append(it.setPreferredDevice(target)).append("→").append(target.productName) } catch (_: Exception) {}
+                    }
                 }
                 it.start()
                 if (Build.VERSION.SDK_INT >= 28) main.postDelayed({
