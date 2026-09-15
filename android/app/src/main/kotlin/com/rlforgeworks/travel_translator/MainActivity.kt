@@ -114,7 +114,9 @@ class MainActivity : FlutterActivity() {
                         main.post { result.success(out) }
                     }
                 }
-                "play" -> playFile(call.argument<String>("path") ?: "", call.argument<Boolean>("speaker") ?: true, result)
+                "play" -> playFile(call.argument<String>("path") ?: "", call.argument<Boolean>("speaker") ?: true,
+                                   (call.argument<Double>("volume") ?: 1.0).toFloat(), result)
+                "boost" -> { boostStream(call.argument<String>("stream") ?: "media", call.argument<Boolean>("on") ?: false); result.success(true) }
                 "stopPlay" -> { stopPlayback(); result.success(true) }
                 else -> result.notImplemented()
             }
@@ -358,7 +360,24 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {}
     }
 
-    private fun playFile(path: String, forceSpeaker: Boolean, result: MethodChannel.Result) {
+    // ---------------- volume boost ----------------
+    private val savedVolume = HashMap<Int, Int>()
+    private fun streamOf(name: String) = if (name == "call") AudioManager.STREAM_VOICE_CALL else AudioManager.STREAM_MUSIC
+    private fun boostStream(name: String, on: Boolean) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val st = streamOf(name)
+        try {
+            if (on) {
+                if (!savedVolume.containsKey(st)) savedVolume[st] = am.getStreamVolume(st)
+                am.setStreamVolume(st, am.getStreamMaxVolume(st), 0)
+            } else {
+                val prev = savedVolume.remove(st) ?: return
+                am.setStreamVolume(st, prev, 0)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun playFile(path: String, forceSpeaker: Boolean, volume: Float, result: MethodChannel.Result) {
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         // Speaker is already the default unless something external is connected.
         val external = externalOutputConnected(am)
@@ -368,10 +387,12 @@ class MainActivity : FlutterActivity() {
         val mp = MediaPlayer()
         player = mp
         var done = false
+        val boost = volume >= 0.99f
         fun finish(ok: Boolean) {
             if (done) return
             done = true
             try { mp.release() } catch (_: Exception) {}
+            if (boost) boostStream(if (speaker) "call" else "media", false)
             if (speaker) {
                 try {
                     if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else am.setSpeakerphoneOn(false)
@@ -406,6 +427,8 @@ class MainActivity : FlutterActivity() {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             }
+            mp.setVolume(volume.coerceIn(0.05f, 1f), volume.coerceIn(0.05f, 1f))
+            if (boost) boostStream(if (speaker) "call" else "media", true)
             mp.setDataSource(path)
             mp.setOnCompletionListener { finish(true) }
             mp.setOnErrorListener { _, _, _ -> finish(false); true }

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'diag.dart';
 import 'native_stt.dart';
@@ -16,8 +17,25 @@ class Speaker {
 
   double rate = 0.55; // a touch quicker than default, still clear
 
+  /// 0..1. At 1.0 the phone's own volume is pushed to max while speaking.
+  double earVolume = 1.0; // their side → your earbud / default output
+  double speakerVolume = 1.0; // your side → phone speaker, for them
+
+  Future<void> loadVolumes() async {
+    final p = await SharedPreferences.getInstance();
+    earVolume = p.getDouble('vol_ear') ?? 1.0;
+    speakerVolume = p.getDouble('vol_speaker') ?? 1.0;
+  }
+
+  Future<void> saveVolumes() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setDouble('vol_ear', earVolume);
+    await p.setDouble('vol_speaker', speakerVolume);
+  }
+
   Future<void> init() async {
     if (_ready) return;
+    await loadVolumes();
     if (Platform.isIOS) {
       await _tts.setSharedInstance(true);
       await _tts.setIosAudioCategory(
@@ -62,9 +80,10 @@ class Speaker {
     if (text.trim().isEmpty) return;
     await init();
     await _tts.setLanguage(locale);
+    final vol = forceSpeaker ? speakerVolume : earVolume;
     if (forceSpeaker && NativeStt.isSupportedPlatform) {
       if (await NativeStt.hasExternalOutput()) {
-        final route = await _sayViaSpeaker(text);
+        final route = await _sayViaSpeaker(text, vol);
         if (route != null) {
           Diag.instance.log('voice → phone speaker ($route)');
           return;
@@ -72,25 +91,33 @@ class Speaker {
         Diag.instance.log('voice → speaker routing FAILED, using default output');
       }
     }
+    await _tts.setVolume(vol.clamp(0.05, 1.0));
+    final boost = vol >= 0.99 && NativeStt.isSupportedPlatform;
+    if (boost) await NativeStt.boost('media', true);
     _done = Completer<void>();
-    await _tts.speak(text);
-    await _done!.future.timeout(
-      Duration(milliseconds: 1500 + text.length * 90),
-      onTimeout: () {},
-    );
+    try {
+      await _tts.speak(text);
+      await _done!.future.timeout(
+        Duration(milliseconds: 1500 + text.length * 90),
+        onTimeout: () {},
+      );
+    } finally {
+      if (boost) await NativeStt.boost('media', false);
+    }
   }
 
-  Future<String?> _sayViaSpeaker(String text) async {
+  Future<String?> _sayViaSpeaker(String text, double vol) async {
     try {
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/say_${DateTime.now().millisecondsSinceEpoch % 7}.wav';
       await _tts.awaitSynthCompletion(true);
+      await _tts.setVolume(1.0);
       final r = await _tts.synthesizeToFile(text, path, true);
       if (r != 1) {
         Diag.instance.log('voice: synthesizeToFile returned $r');
         return null;
       }
-      return await NativeStt.play(path, speaker: true);
+      return await NativeStt.play(path, speaker: true, volume: vol);
     } catch (e) {
       Diag.instance.log('voice: speaker path error $e');
       return null;

@@ -45,6 +45,7 @@ class Pipeline extends ChangeNotifier {
 
   final Listener _listener = Listener();
   final Speaker _speaker = Speaker();
+  Speaker get speaker => _speaker;
   SpeechToText? _stt;
   int _wavSeq = 0;
 

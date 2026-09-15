@@ -88,6 +88,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                 },
                 onStop: () => Navigator.of(context).pop(),
                 onSpeaker: () => setState(() => _pipe.speakerForThem = !_pipe.speakerForThem),
+                onVolume: () => _showVolume(context),
               ),
               Expanded(
                 child: GestureDetector(
@@ -109,6 +110,64 @@ class _ConversationScreenState extends State<ConversationScreen>
           ),
         );
       },
+    );
+  }
+
+  void _showVolume(BuildContext context) {
+    final sp = _pipe.speaker;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Palette.bg2,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('VOLUME', style: TextStyle(color: Palette.gold, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2)),
+              const SizedBox(height: 4),
+              const Text('At 100% the phone\'s own volume is pushed to max while it speaks.',
+                  style: TextStyle(color: Palette.muted, fontSize: 13)),
+              const SizedBox(height: 14),
+              _VolRow(
+                icon: Icons.headphones_rounded,
+                color: Palette.them,
+                label: 'THEM → IN YOUR EAR',
+                value: sp.earVolume,
+                onChanged: (v) => setSheet(() => sp.earVolume = v),
+                onDone: (_) => sp.saveVolumes(),
+              ),
+              const SizedBox(height: 10),
+              _VolRow(
+                icon: Icons.campaign_rounded,
+                color: Palette.you,
+                label: 'YOU → PHONE SPEAKER',
+                value: sp.speakerVolume,
+                onChanged: (v) => setSheet(() => sp.speakerVolume = v),
+                onDone: (_) => sp.saveVolumes(),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _BarBtn(
+                      icon: Icons.replay_rounded,
+                      label: 'Test last line',
+                      on: false,
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        _pipe.replay();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -209,7 +268,7 @@ class _StatusBar extends StatelessWidget {
   final Pipeline pipe;
   final Animation<double> wave;
   final bool bigText, showLatency;
-  final VoidCallback onBigText, onLatency, onReplay, onStop, onSpeaker;
+  final VoidCallback onBigText, onLatency, onReplay, onStop, onSpeaker, onVolume;
   const _StatusBar({
     required this.pipe,
     required this.wave,
@@ -220,6 +279,7 @@ class _StatusBar extends StatelessWidget {
     required this.onReplay,
     required this.onStop,
     required this.onSpeaker,
+    required this.onVolume,
   });
 
   @override
@@ -280,7 +340,9 @@ class _StatusBar extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(child: _BarBtn(icon: Icons.format_size_rounded, label: 'Aa', on: bigText, onTap: onBigText)),
               const SizedBox(width: 8),
-              Expanded(child: _BarBtn(icon: Icons.volume_up_rounded, label: 'Speaker', on: pipe.speakerForThem, onTap: onSpeaker)),
+              Expanded(child: _BarBtn(icon: Icons.campaign_rounded, label: 'Spkr', on: pipe.speakerForThem, onTap: onSpeaker)),
+              const SizedBox(width: 8),
+              Expanded(child: _BarBtn(icon: Icons.volume_up_rounded, label: 'Vol', on: false, onTap: onVolume)),
             ],
           ),
         ],
@@ -318,6 +380,52 @@ class _BarBtn extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _VolRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onDone;
+  const _VolRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.onDone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            const Spacer(),
+            Text('${(value * 100).round()}%',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: color,
+            inactiveTrackColor: Palette.card,
+            thumbColor: color,
+            trackHeight: 8,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
+          ),
+          child: Slider(value: value, min: 0.1, max: 1.0, onChanged: onChanged, onChangeEnd: onDone),
+        ),
+      ],
     );
   }
 }

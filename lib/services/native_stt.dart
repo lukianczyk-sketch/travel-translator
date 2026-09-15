@@ -94,14 +94,21 @@ class NativeStt {
 
   /// Play a synthesized file; speaker=true forces the phone speaker even with
   /// earbuds. Returns the route taken, or null if playback failed.
-  static Future<String?> play(String path, {required bool speaker}) async {
+  static Future<String?> play(String path, {required bool speaker, double volume = 1.0}) async {
     try {
-      final r = await _m.invokeMethod<Map>('play', {'path': path, 'speaker': speaker});
+      final r = await _m.invokeMethod<Map>('play', {'path': path, 'speaker': speaker, 'volume': volume});
       if (r == null || r['ok'] != true) return null;
       return r['route']?.toString() ?? 'ok';
     } catch (e) {
       return null;
     }
+  }
+
+  /// Push a phone volume stream ('media' or 'call') to max (on) or restore it (off).
+  static Future<void> boost(String stream, bool on) async {
+    try {
+      await _m.invokeMethod('boost', {'stream': stream, 'on': on});
+    } catch (_) {}
   }
 
   static Future<void> stopPlay() async {
