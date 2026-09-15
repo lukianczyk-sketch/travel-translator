@@ -140,16 +140,16 @@ if pod.exists():
     t = re.sub(r"^#?\s*platform :ios, '[\d.]+'", "platform :ios, '15.5'", t, count=1, flags=re.M)
     pod.write_text(t)
 
-# ML Kit translation, used directly from MainActivity.
+# ML Kit translation + ONNX Runtime (OPUS-MT brain), used directly from MainActivity.
 for name in ("android/app/build.gradle.kts", "android/app/build.gradle"):
     g = pathlib.Path(name)
     if g.exists():
         t = g.read_text()
         if "com.google.mlkit:translate" not in t:
             if name.endswith(".kts"):
-                t += '\ndependencies {\n    implementation("com.google.mlkit:translate:17.0.3")\n}\n'
+                t += '\ndependencies {\n    implementation("com.google.mlkit:translate:17.0.3")\n    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")\n}\n'
             else:
-                t += "\ndependencies {\n    implementation 'com.google.mlkit:translate:17.0.3'\n}\n"
+                t += "\ndependencies {\n    implementation 'com.google.mlkit:translate:17.0.3'\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.3'\n}\n"
             g.write_text(t)
 
 print("Platforms patched.")

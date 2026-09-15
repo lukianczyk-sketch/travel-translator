@@ -17,5 +17,18 @@ class MlkitTranslate {
   Future<String> translate(String text, String src, String tgt) async =>
       await _m.invokeMethod<String>('translate', {'text': text, 'src': src, 'tgt': tgt}) ?? '';
 
+  // ---- OPUS-MT (Marian) engines running on ONNX Runtime in our own Android code ----
+  Future<void> marianLoad(String key, String dir) async =>
+      await _m.invokeMethod<bool>('marianLoad', {'key': key, 'dir': dir});
+
+  Future<String> marianTranslate(String key, String text) async =>
+      await _m.invokeMethod<String>('marianTranslate', {'key': key, 'text': text}) ?? '';
+
+  Future<void> marianUnload(String key) async {
+    try {
+      await _m.invokeMethod('marianUnload', {'key': key});
+    } catch (_) {}
+  }
+
   Future<void> dispose() async {}
 }

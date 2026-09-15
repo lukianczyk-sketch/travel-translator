@@ -105,6 +105,15 @@ class Pipeline extends ChangeNotifier {
     final tw = DateTime.now();
     final warmErr = await _stt!.warmUp(await ensureSilentWav(mm.modelsPath));
     _log('whisper warm in ${DateTime.now().difference(tw).inMilliseconds} ms${warmErr != null ? ' (note: $warmErr)' : ''}');
+    if (mm.activeBrainPlus && others.any((l) => l.code == 'pl')) {
+      final tb = DateTime.now();
+      try {
+        await mm.mlkit.marianLoad('pl>en', mm.brainPlusPath);
+        _log('brain: opus-mt pl→en loaded in ${DateTime.now().difference(tb).inMilliseconds} ms');
+      } catch (e) {
+        _log('ERROR brain: opus-mt failed to load ($e) — using ML Kit for pl→en');
+      }
+    }
     await _listener.start(await _vadPath());
     _lvlSub = _listener.level.listen((p) {
       level = p;
@@ -230,8 +239,20 @@ class Pipeline extends ChangeNotifier {
         tr = fixed;
         _log('phrasebook ($src→$tgt): "$tr"');
       } else {
-        tr = await ModelManager.instance.mlkit.translate(text, src, tgt);
-        _log('translated ($src→$tgt): "$tr" in ${DateTime.now().difference(t1).inMilliseconds} ms');
+        final mm = ModelManager.instance;
+        var engine = 'mlkit';
+        if (mm.activeBrainPlus && src == 'pl' && tgt == 'en') {
+          try {
+            tr = await mm.mlkit.marianTranslate('pl>en', text);
+            engine = 'opus-mt';
+          } catch (e) {
+            _log('ERROR opus-mt: $e — falling back to ML Kit');
+            tr = await mm.mlkit.translate(text, src, tgt);
+          }
+        } else {
+          tr = await mm.mlkit.translate(text, src, tgt);
+        }
+        _log('translated ($src→$tgt, $engine): "$tr" in ${DateTime.now().difference(t1).inMilliseconds} ms');
       }
     } catch (e) {
       _log('ERROR translate: $e');
@@ -294,6 +315,7 @@ class Pipeline extends ChangeNotifier {
     _listener.dispose();
     await _speaker.stop();
     await _stt?.dispose();
+    await ModelManager.instance.mlkit.marianUnload('pl>en');
     await WakelockPlus.disable();
   }
 }

@@ -62,6 +62,80 @@ class ModelManager extends ChangeNotifier {
   CancelToken? _earsCancel;
   CancelToken? _earsPlusCancel;
 
+  // ---- Better brain: OPUS-MT Polish → English on ONNX Runtime (ML Kit stays for the other way) ----
+  static const brainPlusBase = 'https://huggingface.co/Xenova/opus-mt-pl-en/resolve/main';
+  static const brainPlusFiles = ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_quantized.onnx', 'tokenizer.json', 'config.json'];
+  static const brainPlusDir = 'opus-mt-pl-en';
+  static const brainPlusMb = 130;
+  bool brainPlusReady = false;
+  bool brainPlusDownloading = false;
+  double brainPlusProgress = 0;
+  String? brainPlusError;
+  bool useBrainPlus = true;
+  CancelToken? _brainPlusCancel;
+  bool get activeBrainPlus => useBrainPlus && brainPlusReady;
+  String get brainPlusPath => '$modelsPath/$brainPlusDir';
+
+  Future<void> setUseBrainPlus(bool v) async {
+    useBrainPlus = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('brain_plus', v);
+    notifyListeners();
+  }
+
+  Future<bool> _brainPlusOnDisk() async {
+    for (final f in brainPlusFiles) {
+      final file = File('$brainPlusPath/${f.split('/').last}');
+      if (!await file.exists() || await file.length() < 1000) return false;
+    }
+    return true;
+  }
+
+  Future<void> downloadBrainPlus() async {
+    if (brainPlusDownloading) return;
+    brainPlusDownloading = true;
+    brainPlusError = null;
+    brainPlusProgress = 0;
+    notifyListeners();
+    _brainPlusCancel = CancelToken();
+    await Directory(brainPlusPath).create(recursive: true);
+    final weights = [0.40, 0.55, 0.04, 0.01];
+    var done = 0.0;
+    String? err;
+    for (var i = 0; i < brainPlusFiles.length; i++) {
+      final name = brainPlusFiles[i].split('/').last;
+      final target = '$brainPlusPath/$name';
+      if (await File(target).exists() && await File(target).length() > 1000) {
+        done += weights[i];
+        continue;
+      }
+      err = await _fetch('$brainPlusBase/${brainPlusFiles[i]}', target, _brainPlusCancel!, (p) {
+        brainPlusProgress = done + weights[i] * p;
+        notifyListeners();
+      });
+      if (err != null) break;
+      done += weights[i];
+    }
+    brainPlusError = err;
+    brainPlusReady = await _brainPlusOnDisk();
+    if (brainPlusReady) {
+      await setUseBrainPlus(true);
+      Diag.instance.log('brain: opus-mt pl→en downloaded');
+    }
+    brainPlusDownloading = false;
+    _brainPlusCancel = null;
+    notifyListeners();
+  }
+
+  void cancelBrainPlus() => _brainPlusCancel?.cancel();
+
+  Future<void> deleteBrainPlus() async {
+    final d = Directory(brainPlusPath);
+    if (await d.exists()) await d.delete(recursive: true);
+    brainPlusReady = false;
+    await setUseBrainPlus(false);
+  }
+
   /// The ears pack the conversation will actually use.
   bool get activeEarsPlus => useEarsPlus && earsPlusReady;
   String get activeEarsFile => activeEarsPlus ? earsPlusFile : earsFile;
@@ -94,6 +168,14 @@ class ModelManager extends ChangeNotifier {
     earsPlusReady = await epf.exists() && await epf.length() > earsPlusMb * 1000 * 1000 * 0.6;
     final prefs = await SharedPreferences.getInstance();
     useEarsPlus = prefs.getBool('ears_plus') ?? false;
+    if (!(prefs.getBool('ears_reset_v11') ?? false)) {
+      // v0.11: back to the fast small ears by default (turbo stays available on the switch).
+      useEarsPlus = false;
+      await prefs.setBool('ears_plus', false);
+      await prefs.setBool('ears_reset_v11', true);
+    }
+    useBrainPlus = prefs.getBool('brain_plus') ?? true;
+    brainPlusReady = await _brainPlusOnDisk();
     _chosen.addAll(prefs.getStringList('langs') ?? const []);
     speechAvailable = await NativeStt.available();
     sdk = await NativeStt.sdk();

@@ -53,6 +53,7 @@ class MainActivity : FlutterActivity() {
     private var busyCount = 0
     private var quietCount = 0
     private val translators = HashMap<String, Translator>()
+    private val marian = HashMap<String, MarianTranslator>() // "pl>en" → OPUS-MT engine
     private var player: MediaPlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -148,6 +149,37 @@ class MainActivity : FlutterActivity() {
                             .deleteDownloadedModel(TranslateRemoteModel.Builder(code).build())
                             .addOnSuccessListener { result.success(true) }
                             .addOnFailureListener { result.error("mt", it.toString(), null) }
+                    }
+                    "marianLoad" -> {
+                        val key = call.argument<String>("key") ?: ""
+                        val dir = java.io.File(call.argument<String>("dir") ?: "")
+                        executor.execute {
+                            val existing = marian[key]
+                            if (existing != null && existing.ready) { main.post { result.success(true) }; return@execute }
+                            val m = MarianTranslator(dir)
+                            val ok = m.load()
+                            if (ok) marian[key] = m
+                            main.post { if (ok) result.success(true) else result.error("mt", m.loadError ?: "load failed", null) }
+                        }
+                    }
+                    "marianUnload" -> {
+                        val key = call.argument<String>("key") ?: ""
+                        marian.remove(key)?.close()
+                        result.success(true)
+                    }
+                    "marianTranslate" -> {
+                        val key = call.argument<String>("key") ?: ""
+                        val text = call.argument<String>("text") ?: ""
+                        val m = marian[key]
+                        if (m == null || !m.ready) { result.error("mt", "engine $key not loaded", null); return@setMethodCallHandler }
+                        executor.execute {
+                            try {
+                                val out = m.translate(text)
+                                main.post { result.success(out) }
+                            } catch (e: Throwable) {
+                                main.post { result.error("mt", e.toString(), null) }
+                            }
+                        }
                     }
                     "translate" -> {
                         val src = mlLang(call.argument<String>("src") ?: "")

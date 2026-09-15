@@ -36,6 +36,8 @@ class LanguagesScreen extends StatelessWidget {
               const SizedBox(height: 14),
               _EarsCard(mm: mm),
               const SizedBox(height: 10),
+              _BrainPlusCard(mm: mm),
+              const SizedBox(height: 10),
               _EarsPlusCard(mm: mm),
               const SizedBox(height: 10),
               _EnglishRow(brain: mm.englishBrain, ears: mm.earsReady),
@@ -133,6 +135,104 @@ class _EarsCard extends StatelessWidget {
                   onPressed: mm.downloadEars,
                   icon: const Icon(Icons.download_rounded, size: 24),
                   label: const Text('Get the Ears (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Better brain — OPUS-MT Polish → English on ONNX Runtime, replacing ML Kit
+/// for that one direction (English → Polish stays on ML Kit, which is good).
+class _BrainPlusCard extends StatelessWidget {
+  final ModelManager mm;
+  const _BrainPlusCard({required this.mm});
+  @override
+  Widget build(BuildContext context) {
+    final on = mm.activeBrainPlus;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: on ? Palette.them.withOpacity(0.7) : Colors.transparent, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology_rounded, color: on ? Palette.them : Palette.muted, size: 28),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Better Brain — Polish → English', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text('A dedicated Polish translator · about 130 MB, once', style: TextStyle(color: Palette.muted, fontSize: 14)),
+                  ],
+                ),
+              ),
+              if (mm.brainPlusReady)
+                Switch(
+                  value: mm.useBrainPlus,
+                  activeColor: Palette.them,
+                  onChanged: (v) => mm.setUseBrainPlus(v),
+                ),
+            ],
+          ),
+          if (mm.brainPlusReady) ...[
+            const SizedBox(height: 6),
+            Text(on ? 'ON — Polish → English uses the dedicated translator.' : 'OFF — Polish → English uses the basic translator.',
+                style: TextStyle(color: on ? Palette.them : Palette.muted, fontSize: 14, fontWeight: FontWeight.w600)),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: mm.deleteBrainPlus,
+                child: const Text('Remove pack', style: TextStyle(color: Palette.muted)),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            if (mm.brainPlusDownloading) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: mm.brainPlusProgress == 0 ? null : mm.brainPlusProgress,
+                  minHeight: 12,
+                  backgroundColor: Palette.bg,
+                  color: Palette.them,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text('${(mm.brainPlusProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(onPressed: mm.cancelBrainPlus, child: const Text('Cancel', style: TextStyle(color: Palette.them))),
+                ],
+              ),
+            ] else ...[
+              if (mm.brainPlusError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(mm.brainPlusError!, style: const TextStyle(color: Palette.them, fontSize: 14)),
+                ),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Palette.them,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: mm.downloadBrainPlus,
+                  icon: const Icon(Icons.download_rounded, size: 24),
+                  label: const Text('Get the Better Brain (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],
