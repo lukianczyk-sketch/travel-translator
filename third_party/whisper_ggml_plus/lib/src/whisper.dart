@@ -122,6 +122,7 @@ class Whisper {
     required String modelPath,
     int audioCtx = 0,
     List<String> allowedLangs = const [],
+    bool singlePass = false,
   }) async {
     final TranscribeRequest resolvedRequest = await resolveVadModelPath(transcribeRequest);
     final dto = TranscribeRequestDto.fromTranscribeRequest(resolvedRequest, modelPath);
@@ -131,6 +132,7 @@ class Whisper {
         '@type': dto.specialType,
         'audio_ctx': audioCtx,
         'allowed_langs': allowedLangs.join(','),
+        'single_pass': singlePass,
       }),
     );
     if (result['text'] == null) {

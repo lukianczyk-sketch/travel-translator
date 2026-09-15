@@ -32,6 +32,7 @@
 #include <regex>
 #include <set>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -893,6 +894,8 @@ struct whisper_state {
     std::vector<whisper_token>   prompt_past1; // dynamic context from decoded output
 
     int lang_id = 0; // english by default
+    int encoded_seek = -1; // seek offset whose encoder output is currently in memory (-1 = none)
+    float lang_prob_last = -1.0f; // probability of the auto-detected language (restricted set)
 
     std::string path_model; // populated by whisper_init_from_file_with_params()
 
@@ -4102,6 +4105,11 @@ int whisper_lang_auto_detect(
     return whisper_lang_auto_detect_with_state(ctx, ctx->state, offset_ms, n_threads, lang_probs);
 }
 
+// Restrict whisper_full's auto-detect to a comma list of languages ("en,pl"); "" = all.
+static std::string g_allowed_langs;
+void whisper_set_allowed_langs(const char * csv) { g_allowed_langs = csv ? csv : ""; }
+float whisper_full_lang_prob(struct whisper_context * ctx) { return ctx->state ? ctx->state->lang_prob_last : -1.0f; }
+
 int whisper_lang_auto_detect_ctx(
         struct whisper_context * ctx,
                            int   offset_ms,
@@ -6837,11 +6845,27 @@ int whisper_full_with_state(
     // auto-detect language if not specified
     if (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language) {
         std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
+        // Use the caller's audio window for the detect pass so its encoder output can be reused below.
+        if (params.audio_ctx > 0 && params.audio_ctx <= whisper_n_audio_ctx(ctx)) {
+            state->exp_n_audio_ctx = params.audio_ctx;
+        }
 
-        const auto lang_id = whisper_lang_auto_detect_with_state(ctx, state, 0, params.n_threads, probs.data());
+        auto lang_id = whisper_lang_auto_detect_with_state(ctx, state, 0, params.n_threads, probs.data());
         if (lang_id < 0) {
             WHISPER_LOG_ERROR("%s: failed to auto-detect language\n", __func__);
             return -3;
+        }
+        state->encoded_seek = 0; // the encoder just ran on seek 0 — reuse it below
+        state->lang_prob_last = probs[lang_id];
+        if (!g_allowed_langs.empty()) {
+            int best = -1; float best_p = -1.0f;
+            std::stringstream ss(g_allowed_langs);
+            std::string tok;
+            while (std::getline(ss, tok, ',')) {
+                const int id = whisper_lang_id(tok.c_str());
+                if (id >= 0 && probs[id] > best_p) { best_p = probs[id]; best = id; }
+            }
+            if (best >= 0) { lang_id = best; state->lang_prob_last = best_p; }
         }
         state->lang_id = lang_id;
         params.language = whisper_lang_str(lang_id);
@@ -7042,8 +7066,10 @@ int whisper_full_with_state(
             }
         }
 
-        // encode audio features starting at offset seek
-        if (!whisper_encode_internal(*ctx, *state, seek, params.n_threads, params.abort_callback, params.abort_callback_user_data)) {
+        // encode audio features starting at offset seek (unless auto-detect just did exactly this)
+        if (state->encoded_seek == seek) {
+            state->encoded_seek = -1;
+        } else if (!whisper_encode_internal(*ctx, *state, seek, params.n_threads, params.abort_callback, params.abort_callback_user_data)) {
             WHISPER_LOG_ERROR("%s: failed to encode\n", __func__);
             return -6;
         }

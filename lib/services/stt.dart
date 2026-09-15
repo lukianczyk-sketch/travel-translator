@@ -31,9 +31,12 @@ class SpeechToText {
   final String modelPath;
   final String vadModelPath;
   final int threads;
+  /// True for the big model: one decode with restricted auto-detect (one encoder run).
+  /// False for small: decode once per language and keep the most confident.
+  final bool singlePass;
   final Whisper _whisper = const Whisper(model: WhisperModel.small);
 
-  SpeechToText({required this.modelPath, required this.vadModelPath, this.threads = 6});
+  SpeechToText({required this.modelPath, required this.vadModelPath, this.threads = 6, this.singlePass = false});
 
   Future<String?> warmUp(String silentWavPath) async {
     try {
@@ -62,6 +65,7 @@ class SpeechToText {
       modelPath: modelPath,
       audioCtx: ctx,
       allowedLangs: allowedLangs,
+      singlePass: singlePass,
     );
     final cands = <Candidate>[];
     for (final c in (res['candidates'] as List? ?? const [])) {

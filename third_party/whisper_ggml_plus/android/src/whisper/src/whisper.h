@@ -382,6 +382,11 @@ extern "C" {
                              float * lang_probs);
 
     // Same, with a reduced encoder window (audio_ctx) for short clips.
+    // Restrict whisper_full's language auto-detect to a comma list ("en,pl"); "" = all.
+    WHISPER_API void  whisper_set_allowed_langs(const char * csv);
+    // Probability of the language chosen by the last whisper_full auto-detect (-1 if none).
+    WHISPER_API float whisper_full_lang_prob(struct whisper_context * ctx);
+
     WHISPER_API int whisper_lang_auto_detect_ctx(
             struct whisper_context * ctx,
                                int   offset_ms,

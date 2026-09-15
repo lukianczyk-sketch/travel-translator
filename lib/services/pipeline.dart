@@ -82,7 +82,7 @@ class Pipeline extends ChangeNotifier {
 
   Future<void> start() async {
     final mm = ModelManager.instance;
-    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (whisper small, decode in every language)');
+    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (${mm.activeEarsName}, ${mm.activeEarsPlus ? 'single pass' : 'decode in every language'})');
     await WakelockPlus.enable();
     await _speaker.init();
     if (!NativeStt.isSupportedPlatform) {
@@ -93,9 +93,10 @@ class Pipeline extends ChangeNotifier {
     status = 'Warming up the ears…';
     notifyListeners();
     _stt = SpeechToText(
-      modelPath: mm.filePath(ModelManager.earsFile),
+      modelPath: mm.filePath(mm.activeEarsFile),
       vadModelPath: await _vadPath(),
       threads: 6,
+      singlePass: mm.activeEarsPlus,
     );
     final tw = DateTime.now();
     final warmErr = await _stt!.warmUp(await ensureSilentWav(mm.modelsPath));

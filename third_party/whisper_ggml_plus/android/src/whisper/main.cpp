@@ -51,6 +51,7 @@ struct whisper_params
     bool speed_up = false;
     int audio_ctx = 0; // 0 = full 30 s window; else mel frames (50 per second)
     std::string allowed_langs; // comma list, e.g. "en,pl": restrict auto-detect to these
+    bool single_pass = false;  // true: one decode with (restricted) auto-detect; false: decode per language
     bool translate = false;
     bool diarize = false;
     bool no_fallback = false;
@@ -146,6 +147,7 @@ json transcribe(json jsonBody)
     params.no_fallback = jsonBody.value("no_fallback", false);
     params.audio_ctx = jsonBody.value("audio_ctx", 0);
     params.allowed_langs = jsonBody.value("allowed_langs", std::string(""));
+    params.single_pass = jsonBody.value("single_pass", false);
     params.vad_mode = parse_vad_mode(jsonBody);
     params.vad_model_path = jsonBody.value("vad_model_path", std::string(""));
 
@@ -203,7 +205,7 @@ json transcribe(json jsonBody)
                         "[DEBUG] Model info - n_text_layer: %d, n_vocab: %d, is_turbo: %d", 
                         model_n_text_layer, model_n_vocab, is_turbo);
 
-    whisper_sampling_strategy strategy = is_turbo ? WHISPER_SAMPLING_BEAM_SEARCH : WHISPER_SAMPLING_GREEDY;
+    whisper_sampling_strategy strategy = WHISPER_SAMPLING_GREEDY; // one pass; beam search is too slow on a phone
     whisper_full_params wparams = whisper_full_default_params(strategy);
     
     wparams.print_realtime = false;
@@ -234,11 +236,7 @@ json transcribe(json jsonBody)
         wparams.vad = false;
     }
 
-    if (is_turbo) {
-        wparams.beam_search.beam_size = 3;
-        __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter",
-                            "[DEBUG] Turbo model detected - using beam search (beam_size=3)");
-    }
+    wparams.greedy.best_of = 1;
 
     if (params.split_on_word) {
         wparams.max_len = 1;
@@ -314,6 +312,27 @@ json transcribe(json jsonBody)
         }
         return true;
     };
+
+    if (langs.size() >= 2 && params.single_pass) {
+        // Strong model: let it hear once and pick among the languages in play.
+        whisper_set_allowed_langs(params.allowed_langs.c_str());
+        wparams.language = "auto";
+        wparams.detect_language = false;
+        const bool ok = run();
+        whisper_set_allowed_langs("");
+        if (!ok) return jsonResult;
+        auto end_time = std::chrono::high_resolution_clock::now();
+        __android_log_print(ANDROID_LOG_DEBUG, "WhisperFlutter", "[DEBUG] Single-pass decode in %lldms",
+                            (long long)std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+        std::string text_result; double lp = 0.0; int ntok = 0;
+        collect(text_result, lp, ntok);
+        jsonResult["text"] = text_result;
+        jsonResult["logprob"] = lp;
+        jsonResult["language"] = whisper_lang_str(whisper_full_lang_id(g_ctx));
+        const float lpb = whisper_full_lang_prob(g_ctx);
+        if (lpb >= 0) jsonResult["language_prob"] = lpb;
+        return jsonResult;
+    }
 
     if (langs.size() >= 2) {
         struct Cand { std::string lang; std::string text; double logprob; int ntok; float lidp; double score; };

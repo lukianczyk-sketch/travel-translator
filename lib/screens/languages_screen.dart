@@ -36,6 +36,8 @@ class LanguagesScreen extends StatelessWidget {
               const SizedBox(height: 14),
               _EarsCard(mm: mm),
               const SizedBox(height: 10),
+              _EarsPlusCard(mm: mm),
+              const SizedBox(height: 10),
               _EnglishRow(brain: mm.englishBrain, ears: mm.earsReady),
               const SizedBox(height: 18),
               ...travelLanguages.map(
@@ -131,6 +133,104 @@ class _EarsCard extends StatelessWidget {
                   onPressed: mm.downloadEars,
                   icon: const Icon(Icons.download_rounded, size: 24),
                   label: const Text('Get the Ears (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Sharper ears — Whisper large-v3-turbo. Much better on Polish, German,
+/// Greek, Japanese; heavier, so it's an opt-in second pack with a switch.
+class _EarsPlusCard extends StatelessWidget {
+  final ModelManager mm;
+  const _EarsPlusCard({required this.mm});
+  @override
+  Widget build(BuildContext context) {
+    final on = mm.activeEarsPlus;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: on ? Palette.gold.withOpacity(0.7) : Colors.transparent, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, color: on ? Palette.gold : Palette.muted, size: 28),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Sharper Ears — Whisper turbo', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text('Much better on Polish, German, Greek · about 550 MB, once', style: TextStyle(color: Palette.muted, fontSize: 14)),
+                  ],
+                ),
+              ),
+              if (mm.earsPlusReady)
+                Switch(
+                  value: mm.useEarsPlus,
+                  activeColor: Palette.gold,
+                  onChanged: (v) => mm.setUseEarsPlus(v),
+                ),
+            ],
+          ),
+          if (mm.earsPlusReady) ...[
+            const SizedBox(height: 6),
+            Text(on ? 'ON — conversations use the sharper ears (a little slower).' : 'OFF — conversations use the fast small ears.',
+                style: TextStyle(color: on ? Palette.gold : Palette.muted, fontSize: 14, fontWeight: FontWeight.w600)),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: mm.deleteEarsPlus,
+                child: const Text('Remove pack', style: TextStyle(color: Palette.muted)),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            if (mm.earsPlusDownloading) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: mm.earsPlusProgress == 0 ? null : mm.earsPlusProgress,
+                  minHeight: 12,
+                  backgroundColor: Palette.bg,
+                  color: Palette.gold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text('${(mm.earsPlusProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(onPressed: mm.cancelEarsPlus, child: const Text('Cancel', style: TextStyle(color: Palette.them))),
+                ],
+              ),
+            ] else ...[
+              if (mm.earsPlusError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(mm.earsPlusError!, style: const TextStyle(color: Palette.them, fontSize: 14)),
+                ),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Palette.gold,
+                    foregroundColor: Palette.bg,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: mm.downloadEarsPlus,
+                  icon: const Icon(Icons.download_rounded, size: 24),
+                  label: const Text('Get the Sharper Ears (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],

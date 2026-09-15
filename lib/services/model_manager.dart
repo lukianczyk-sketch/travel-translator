@@ -41,17 +41,38 @@ class ModelManager extends ChangeNotifier {
   int sdk = 0;
   StreamSubscription? _evSub;
 
-  // ---- Ears: Whisper small, one file for every language ----
+  // ---- Ears: Whisper small (fast) and large-v3-turbo (sharp), one file for every language ----
   static const earsUrl = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin';
   static const earsFile = 'ggml-small-q8_0.bin';
   static const earsMb = 264;
+  static const earsPlusUrl = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin';
+  static const earsPlusFile = 'ggml-large-v3-turbo-q5_0.bin';
+  static const earsPlusMb = 547;
   bool earsReady = false;
   bool earsDownloading = false;
   double earsProgress = 0;
   String? earsError;
+  bool earsPlusReady = false;
+  bool earsPlusDownloading = false;
+  double earsPlusProgress = 0;
+  String? earsPlusError;
+  bool useEarsPlus = false; // user's choice; only honoured when the pack is on the phone
   String modelsPath = '';
   final Dio _dio = Dio();
   CancelToken? _earsCancel;
+  CancelToken? _earsPlusCancel;
+
+  /// The ears pack the conversation will actually use.
+  bool get activeEarsPlus => useEarsPlus && earsPlusReady;
+  String get activeEarsFile => activeEarsPlus ? earsPlusFile : earsFile;
+  String get activeEarsName => activeEarsPlus ? 'Whisper large-v3-turbo' : 'Whisper small';
+
+  Future<void> setUseEarsPlus(bool v) async {
+    useEarsPlus = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('ears_plus', v);
+    notifyListeners();
+  }
 
   String filePath(String name) => '$modelsPath/$name';
 
@@ -69,7 +90,10 @@ class ModelManager extends ChangeNotifier {
     modelsPath = dir.path;
     final ef = File(filePath(earsFile));
     earsReady = await ef.exists() && await ef.length() > earsMb * 1000 * 1000 * 0.6;
+    final epf = File(filePath(earsPlusFile));
+    earsPlusReady = await epf.exists() && await epf.length() > earsPlusMb * 1000 * 1000 * 0.6;
     final prefs = await SharedPreferences.getInstance();
+    useEarsPlus = prefs.getBool('ears_plus') ?? false;
     _chosen.addAll(prefs.getStringList('langs') ?? const []);
     speechAvailable = await NativeStt.available();
     sdk = await NativeStt.sdk();
@@ -118,39 +142,76 @@ class ModelManager extends ChangeNotifier {
     earsError = null;
     earsProgress = 0;
     notifyListeners();
-    final target = filePath(earsFile);
-    final tmp = '$target.part';
     _earsCancel = CancelToken();
+    final err = await _fetch(earsUrl, filePath(earsFile), _earsCancel!, (p) {
+      earsProgress = p;
+      notifyListeners();
+    });
+    earsError = err;
+    if (err == null) {
+      earsReady = true;
+      Diag.instance.log('ears: whisper small downloaded');
+    }
+    earsDownloading = false;
+    _earsCancel = null;
+    await refresh();
+  }
+
+  Future<void> downloadEarsPlus() async {
+    if (earsPlusDownloading) return;
+    earsPlusDownloading = true;
+    earsPlusError = null;
+    earsPlusProgress = 0;
+    notifyListeners();
+    _earsPlusCancel = CancelToken();
+    final err = await _fetch(earsPlusUrl, filePath(earsPlusFile), _earsPlusCancel!, (p) {
+      earsPlusProgress = p;
+      notifyListeners();
+    });
+    earsPlusError = err;
+    if (err == null) {
+      earsPlusReady = true;
+      await setUseEarsPlus(true);
+      Diag.instance.log('ears: whisper large-v3-turbo downloaded');
+    }
+    earsPlusDownloading = false;
+    _earsPlusCancel = null;
+    await refresh();
+  }
+
+  /// Downloads to a .part file then renames. Returns an error message or null.
+  Future<String?> _fetch(String url, String target, CancelToken cancel, void Function(double) onProgress) async {
+    final tmp = '$target.part';
     try {
       await _dio.download(
-        earsUrl,
+        url,
         tmp,
-        cancelToken: _earsCancel,
+        cancelToken: cancel,
         options: Options(receiveTimeout: const Duration(hours: 2)),
         onReceiveProgress: (got, len) {
-          if (len > 0) {
-            earsProgress = got / len;
-            notifyListeners();
-          }
+          if (len > 0) onProgress(got / len);
         },
       );
       await File(tmp).rename(target);
-      earsReady = true;
-      Diag.instance.log('ears: whisper small downloaded');
+      return null;
     } on DioException catch (e) {
-      earsError = CancelToken.isCancel(e) ? null : 'Download failed. Check wifi and retry.';
       final f = File(tmp);
       if (await f.exists()) await f.delete();
+      return CancelToken.isCancel(e) ? null : 'Download failed. Check wifi and retry.';
     } catch (e) {
-      earsError = 'Download failed: $e';
-    } finally {
-      earsDownloading = false;
-      _earsCancel = null;
-      await refresh();
+      return 'Download failed: $e';
     }
   }
 
   void cancelEars() => _earsCancel?.cancel();
+  void cancelEarsPlus() => _earsPlusCancel?.cancel();
+
+  Future<void> deleteEarsPlus() async {
+    final f = File(filePath(earsPlusFile));
+    if (await f.exists()) await f.delete();
+    earsPlusReady = false;
+    await setUseEarsPlus(false);
+  }
 
   void _onEvent(SttEvent e) {
     if (e.type != 'download') return;
