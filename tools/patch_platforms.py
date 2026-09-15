@@ -140,16 +140,38 @@ if pod.exists():
     t = re.sub(r"^#?\s*platform :ios, '[\d.]+'", "platform :ios, '15.5'", t, count=1, flags=re.M)
     pod.write_text(t)
 
-# ML Kit translation + ONNX Runtime (OPUS-MT brain), used directly from MainActivity.
+# ML Kit translation + ONNX Runtime Java API (OPUS-MT brain), used directly from MainActivity.
+# The Flutter `onnxruntime` plugin bundles its own libonnxruntime.so; use the SAME
+# ORT version for the Java API and let Gradle keep one copy of the duplicated .so.
+import glob, os, subprocess
+ort_version = "1.16.3"
+try:
+    sos = glob.glob(os.path.expanduser("~/.pub-cache/hosted/pub.dev/onnxruntime-*/android/src/main/jniLibs/arm64-v8a/libonnxruntime.so"))
+    found = []
+    for so in sos:
+        out = subprocess.run(["strings", so], capture_output=True, text=True).stdout
+        found += re.findall(r"^(1\.\d{1,2}\.\d{1,2})$", out, flags=re.M)
+    if found:
+        ort_version = sorted(set(found), key=lambda v: [int(x) for x in v.split(".")])[-1]
+    print("ORT version bundled by the Flutter plugin:", ort_version if found else "unknown (using %s)" % ort_version)
+except Exception as e:
+    print("ORT version detection failed:", e)
+pick = ["lib/arm64-v8a/libonnxruntime.so", "lib/armeabi-v7a/libonnxruntime.so", "lib/x86_64/libonnxruntime.so", "lib/x86/libonnxruntime.so"]
 for name in ("android/app/build.gradle.kts", "android/app/build.gradle"):
     g = pathlib.Path(name)
     if g.exists():
         t = g.read_text()
         if "com.google.mlkit:translate" not in t:
             if name.endswith(".kts"):
-                t += '\ndependencies {\n    implementation("com.google.mlkit:translate:17.0.3")\n    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")\n}\n'
+                t += '\ndependencies {\n    implementation("com.google.mlkit:translate:17.0.3")\n    implementation("com.microsoft.onnxruntime:onnxruntime-android:%s")\n}\n' % ort_version
             else:
-                t += "\ndependencies {\n    implementation 'com.google.mlkit:translate:17.0.3'\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.3'\n}\n"
-            g.write_text(t)
+                t += "\ndependencies {\n    implementation 'com.google.mlkit:translate:17.0.3'\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:%s'\n}\n" % ort_version
+        if "libonnxruntime.so" not in t:
+            if name.endswith(".kts"):
+                block = "android {\n    packaging {\n        jniLibs {\n            pickFirsts += setOf(%s)\n        }\n    }" % ", ".join('"%s"' % x for x in pick)
+            else:
+                block = "android {\n    packagingOptions {\n        jniLibs {\n            pickFirsts += [%s]\n        }\n    }" % ", ".join("'%s'" % x for x in pick)
+            t = t.replace("android {", block, 1)
+        g.write_text(t)
 
 print("Platforms patched.")
