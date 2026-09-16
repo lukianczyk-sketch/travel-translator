@@ -49,6 +49,9 @@ class SpeechToText {
 
   /// [seconds] = length of the clip; the audio window is sized to it so
   /// Whisper doesn't pad every sentence out to 30 s.
+  /// Language of the last sentence that was actually acted on (helps catch false language flips).
+  String prevLang = '';
+
   Future<Heard> transcribe(String wavPath, {required double seconds, List<String> allowedLangs = const []}) async {
     // 50 mel frames per second; keep a margin and a sane floor.
     final ctx = ((seconds + 1.0) * 50).clamp(160, 1500).round();
