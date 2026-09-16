@@ -123,6 +123,8 @@ class Pipeline extends ChangeNotifier {
         _log('ERROR brain: opus-mt failed to load ($e) — using ML Kit for pl→en');
       }
     }
+    _earbudsOn = NativeStt.isSupportedPlatform && await NativeStt.hasExternalOutput();
+    _log('earbuds/headset connected: $_earbudsOn');
     await _listener.start(await _vadPath());
     _lvlSub = _listener.level.listen((p) {
       level = p;
@@ -146,12 +148,26 @@ class Pipeline extends ChangeNotifier {
     _busy = true;
     try {
       while (_queue.isNotEmpty && !_stopped) {
-        await _handle(_queue.removeAt(0));
+        var pcm = _queue.removeAt(0);
+        // Fell behind? Merge what's waiting into one clip (up to ~8 s) so one
+        // decode catches up instead of the backlog snowballing.
+        while (_queue.isNotEmpty && (pcm.length + _queue.first.length) <= Listener.sampleRate * 8) {
+          final next = _queue.removeAt(0);
+          final merged = Float32List(pcm.length + next.length);
+          merged.setAll(0, pcm);
+          merged.setAll(pcm.length, next);
+          pcm = merged;
+          _log('backlog: merged the next clip (now ${(pcm.length / Listener.sampleRate).toStringAsFixed(1)} s)');
+        }
+        await _handle(pcm);
       }
     } finally {
       _busy = false;
     }
   }
+
+  Future<void> _speakChain = Future.value();
+  bool _earbudsOn = false;
 
   Uint8List _toPcm16(Float32List f) {
     final out = ByteData(f.length * 2);
@@ -301,15 +317,25 @@ class Pipeline extends ChangeNotifier {
       turn = Turn.speaking;
       status = fromThem ? 'In your ear…' : 'Speaking for you…';
       notifyListeners();
-      _listener.muted = true; // don't hear ourselves
+      final locale = last!.speakLocale;
+      final toSpeaker = !fromThem && speakerForThem;
+      // Their side going into your earbuds can't be heard by the mic, so keep
+      // listening and let the next clip decode while this one is still playing.
+      final privateRoute = fromThem && _earbudsOn;
       final ts = DateTime.now();
-      try {
-        await _speaker.say(tr, last!.speakLocale, forceSpeaker: !fromThem && speakerForThem);
-        _log('spoke (${last!.speakLocale}) for ${DateTime.now().difference(ts).inMilliseconds} ms');
-      } catch (e) {
-        _log('ERROR tts: $e');
-      }
-      _listener.muted = false;
+      _speakChain = _speakChain.then((_) async {
+        if (_stopped) return;
+        if (!privateRoute) _listener.muted = true; // don't hear ourselves
+        try {
+          await _speaker.say(tr, locale, forceSpeaker: toSpeaker);
+          _log('spoke ($locale) for ${DateTime.now().difference(ts).inMilliseconds} ms${privateRoute ? ' (mic stayed open)' : ''}');
+        } catch (e) {
+          _log('ERROR tts: $e');
+        } finally {
+          if (!privateRoute) _listener.muted = false;
+        }
+      });
+      if (!privateRoute) await _speakChain;
     } else {
       lastLatency = Latency(t1.difference(t0).inMilliseconds, t2.difference(t1).inMilliseconds,
           t2.difference(t0).inMilliseconds);
@@ -333,6 +359,7 @@ class Pipeline extends ChangeNotifier {
   Future<void> stop() async {
     _log('pipeline stop');
     _stopped = true;
+    try { await _speakChain.timeout(const Duration(seconds: 2)); } catch (_) {}
     await _uttSub?.cancel();
     await _lvlSub?.cancel();
     await _listener.stop();

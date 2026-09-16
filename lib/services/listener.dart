@@ -16,10 +16,10 @@ class Listener {
 
   // Tunables
   final double threshold = 0.5;
-  final int silenceMs = 350; // pause that ends an utterance
+  final int silenceMs = 300; // pause that ends an utterance
   final int minSpeechMs = 300; // ignore blips shorter than this
   final int preRollMs = 240; // audio kept from before speech was detected
-  final int maxUtteranceMs = 8000; // force a cut on long monologues (keeps the ears quick)
+  final int maxUtteranceMs = 5000; // force a cut on long monologues (keeps the ears quick)
 
   final AudioRecorder _rec = AudioRecorder();
   OrtSession? _vad;
