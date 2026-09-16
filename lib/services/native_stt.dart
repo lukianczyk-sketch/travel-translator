@@ -104,10 +104,10 @@ class NativeStt {
     }
   }
 
-  /// Push a phone volume stream ('media' or 'call') to max (on) or restore it (off).
-  static Future<void> boost(String stream, bool on) async {
+  /// Set a phone volume stream ('media' or 'call') to a fraction of its maximum.
+  static Future<void> setLevel(String stream, double fraction) async {
     try {
-      await _m.invokeMethod('boost', {'stream': stream, 'on': on});
+      await _m.invokeMethod('setLevel', {'stream': stream, 'fraction': fraction});
     } catch (_) {}
   }
 

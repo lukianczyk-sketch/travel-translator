@@ -47,6 +47,15 @@ class Pipeline extends ChangeNotifier {
   final Listener _listener = Listener();
   final Speaker _speaker = Speaker();
   Speaker get speaker => _speaker;
+
+  /// Volume test: their side into the earpiece (English), or your side out the phone speaker (their language).
+  Future<void> testVoice({required bool earpiece}) async {
+    if (earpiece) {
+      await _speaker.test(speaker: false, locale: english.ttsLocale, phrase: 'Testing your earpiece. This is how they will sound.');
+    } else {
+      await _speaker.test(speaker: speakerForThem, locale: other.ttsLocale, phrase: 'Test. Test. Test.');
+    }
+  }
   SpeechToText? _stt;
   int _wavSeq = 0;
 

@@ -17,7 +17,7 @@ class Speaker {
 
   double rate = 0.55; // a touch quicker than default, still clear
 
-  /// 0..1. At 1.0 the phone's own volume is pushed to max while speaking.
+  /// 0..1 — the phone's real volume for that route (earbuds/default vs phone speaker).
   double earVolume = 1.0; // their side → your earbud / default output
   double speakerVolume = 1.0; // your side → phone speaker, for them
 
@@ -91,20 +91,21 @@ class Speaker {
       }
       Diag.instance.log('voice → ${forceSpeaker ? 'speaker' : 'earbud'} routing FAILED, using default output');
     }
-    await _tts.setVolume(vol.clamp(0.05, 1.0));
-    final boost = vol >= 0.99 && NativeStt.isSupportedPlatform;
-    if (boost) await NativeStt.boost('media', true);
+    // No earbuds: the phone's media volume follows the slider; the voice itself plays at full.
+    if (NativeStt.isSupportedPlatform) await NativeStt.setLevel('media', vol);
+    await _tts.setVolume(1.0);
+    Diag.instance.log('voice → default output (level ${(vol * 100).round()}%)');
     _done = Completer<void>();
-    try {
-      await _tts.speak(text);
-      await _done!.future.timeout(
-        Duration(milliseconds: 1500 + text.length * 90),
-        onTimeout: () {},
-      );
-    } finally {
-      if (boost) await NativeStt.boost('media', false);
-    }
+    await _tts.speak(text);
+    await _done!.future.timeout(
+      Duration(milliseconds: 1500 + text.length * 90),
+      onTimeout: () {},
+    );
   }
+
+  /// Plays a short test phrase through one route so the volume can be checked without a conversation.
+  Future<void> test({required bool speaker, required String locale, required String phrase}) =>
+      say(phrase, locale, forceSpeaker: speaker);
 
   Future<String?> _sayViaNative(String text, double vol, {required bool speaker}) async {
     try {

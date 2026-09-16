@@ -117,7 +117,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "play" -> playFile(call.argument<String>("path") ?: "", call.argument<Boolean>("speaker") ?: true,
                                    (call.argument<Double>("volume") ?: 1.0).toFloat(), result)
-                "boost" -> { boostStream(call.argument<String>("stream") ?: "media", call.argument<Boolean>("on") ?: false); result.success(true) }
+                "setLevel" -> { setLevel(call.argument<String>("stream") ?: "media", (call.argument<Double>("fraction") ?: 1.0).toFloat()); result.success(true) }
                 "stopPlay" -> { stopPlayback(); result.success(true) }
                 else -> result.notImplemented()
             }
@@ -411,20 +411,16 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {}
     }
 
-    // ---------------- volume boost ----------------
-    private val savedVolume = HashMap<Int, Int>()
+    // ---------------- volume ----------------
     private fun streamOf(name: String) = if (name == "call") AudioManager.STREAM_VOICE_CALL else AudioManager.STREAM_MUSIC
-    private fun boostStream(name: String, on: Boolean) {
+    /** Sets a phone volume stream to a fraction (0..1) of its maximum. Simple and predictable. */
+    private fun setLevel(name: String, fraction: Float) {
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val st = streamOf(name)
         try {
-            if (on) {
-                if (!savedVolume.containsKey(st)) savedVolume[st] = am.getStreamVolume(st)
-                am.setStreamVolume(st, am.getStreamMaxVolume(st), 0)
-            } else {
-                val prev = savedVolume.remove(st) ?: return
-                am.setStreamVolume(st, prev, 0)
-            }
+            val max = am.getStreamMaxVolume(st)
+            val idx = Math.round(fraction.coerceIn(0f, 1f) * max).coerceIn(1, max)
+            am.setStreamVolume(st, idx, 0)
         } catch (_: Exception) {}
     }
 
@@ -438,13 +434,11 @@ class MainActivity : FlutterActivity() {
         val mp = MediaPlayer()
         player = mp
         var done = false
-        val boost = volume >= 0.99f
         val spk = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
         fun finish(ok: Boolean) {
             if (done) return
             done = true
             try { mp.release() } catch (_: Exception) {}
-            if (boost) boostStream(if (speaker) "call" else "media", false)
             if (speaker) leaveCallMode(am)
             main.post { result.success(mapOf("ok" to ok, "route" to route.toString())) }
         }
@@ -473,8 +467,10 @@ class MainActivity : FlutterActivity() {
                 @Suppress("DEPRECATION")
                 route.append(" mode=").append(am.mode).append(" sco=").append(am.isBluetoothScoOn).append(" a2dp=").append(am.isBluetoothA2dpOn)
             }
-            mp.setVolume(volume.coerceIn(0.05f, 1f), volume.coerceIn(0.05f, 1f))
-            if (boost) boostStream(if (speaker) "call" else "media", true)
+            // The slider sets the phone's real volume for that route; the player itself plays at full.
+            setLevel(if (speaker) "call" else "media", volume)
+            mp.setVolume(1f, 1f)
+            route.append(" level=").append(Math.round(volume * 100)).append("%")
             mp.setDataSource(path)
             mp.setOnCompletionListener { finish(true) }
             mp.setOnErrorListener { _, _, _ -> finish(false); true }

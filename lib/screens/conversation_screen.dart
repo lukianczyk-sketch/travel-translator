@@ -128,7 +128,7 @@ class _ConversationScreenState extends State<ConversationScreen>
             children: [
               const Text('VOLUME', style: TextStyle(color: Palette.gold, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2)),
               const SizedBox(height: 4),
-              const Text('At 100% the phone\'s own volume is pushed to max while it speaks.',
+              const Text('These set the phone\'s real volume for each route. Use the test buttons to hear each one.',
                   style: TextStyle(color: Palette.muted, fontSize: 13)),
               const SizedBox(height: 14),
               _VolRow(
@@ -153,12 +153,26 @@ class _ConversationScreenState extends State<ConversationScreen>
                 children: [
                   Expanded(
                     child: _BarBtn(
-                      icon: Icons.replay_rounded,
-                      label: 'Test last line',
+                      icon: Icons.headphones_rounded,
+                      label: 'Test earpiece',
                       on: false,
+                      tall: true,
                       onTap: () {
                         HapticFeedback.mediumImpact();
-                        _pipe.replay();
+                        _pipe.testVoice(earpiece: true);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _BarBtn(
+                      icon: Icons.campaign_rounded,
+                      label: 'Test phone speaker',
+                      on: false,
+                      tall: true,
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        _pipe.testVoice(earpiece: false);
                       },
                     ),
                   ),
