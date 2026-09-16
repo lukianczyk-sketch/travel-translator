@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const appVersion = '0.11.0';
+const appVersion = '0.11.1';
 
 /// Palette: deep midnight base, electric coral for "them", cyan for "you".
 class Palette {

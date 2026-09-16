@@ -339,10 +339,20 @@ class _StatusBar extends StatelessWidget {
               Expanded(child: _BarBtn(icon: Icons.speed_rounded, label: 'Time', on: showLatency, onTap: onLatency)),
               const SizedBox(width: 8),
               Expanded(child: _BarBtn(icon: Icons.format_size_rounded, label: 'Aa', on: bigText, onTap: onBigText)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                  child: _BarBtn(
+                      icon: Icons.campaign_rounded,
+                      label: pipe.speakerForThem ? 'Speaker for them: ON' : 'Speaker for them: OFF',
+                      on: pipe.speakerForThem,
+                      onTap: onSpeaker,
+                      tall: true)),
               const SizedBox(width: 8),
-              Expanded(child: _BarBtn(icon: Icons.campaign_rounded, label: 'Spkr', on: pipe.speakerForThem, onTap: onSpeaker)),
-              const SizedBox(width: 8),
-              Expanded(child: _BarBtn(icon: Icons.volume_up_rounded, label: 'Vol', on: false, onTap: onVolume)),
+              Expanded(child: _BarBtn(icon: Icons.volume_up_rounded, label: 'VOLUME', on: true, onTap: onVolume, tall: true)),
             ],
           ),
         ],
@@ -357,15 +367,16 @@ class _BarBtn extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool on;
+  final bool tall;
   final VoidCallback onTap;
-  const _BarBtn({required this.icon, required this.label, required this.on, required this.onTap});
+  const _BarBtn({required this.icon, required this.label, required this.on, required this.onTap, this.tall = false});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 34,
+        height: tall ? 46 : 34,
         decoration: BoxDecoration(
           color: on ? Palette.gold : Palette.card,
           borderRadius: BorderRadius.circular(12),
@@ -373,10 +384,14 @@ class _BarBtn extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 20, color: on ? Palette.bg : Colors.white),
+            Icon(icon, size: tall ? 24 : 20, color: on ? Palette.bg : Colors.white),
             const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: on ? Palette.bg : Colors.white)),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: tall ? 15 : 13, fontWeight: FontWeight.w800, color: on ? Palette.bg : Colors.white)),
+            ),
           ],
         ),
       ),
