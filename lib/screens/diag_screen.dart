@@ -16,7 +16,7 @@ class DiagScreen extends StatelessWidget {
         final d = Diag.instance;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Diagnostics'),
+            title: Text('Diagnostics — v$appVersion'),
             actions: [
               IconButton(
                 tooltip: 'Copy log',

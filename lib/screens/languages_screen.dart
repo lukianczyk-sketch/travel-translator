@@ -50,12 +50,17 @@ class LanguagesScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               Center(
+                child: Text('VERSION $appVersion',
+                    style: const TextStyle(color: Palette.gold, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
+              ),
+              const SizedBox(height: 6),
+              Center(
                 child: TextButton.icon(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const DiagScreen()),
                   ),
                   icon: const Icon(Icons.bug_report_outlined, color: Palette.muted),
-                  label: Text('Diagnostics · v$appVersion', style: const TextStyle(color: Palette.muted, fontSize: 16)),
+                  label: const Text('Diagnostics', style: TextStyle(color: Palette.muted, fontSize: 16)),
                 ),
               ),
             ],
