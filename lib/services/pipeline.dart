@@ -171,6 +171,10 @@ class Pipeline extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_stopped) {
+      _log('decode finished after stop — dropped');
+      return;
+    }
     final t1 = DateTime.now();
     // The winning decode may be a bracketed "[blank]" tag that cleans to
     // nothing — if so, fall back to the best decode that has real words.

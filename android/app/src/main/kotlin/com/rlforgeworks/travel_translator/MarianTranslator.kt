@@ -72,8 +72,11 @@ class MarianTranslator(private val dir: File) {
             if (decoderStartId < 0) decoderStartId = padId
 
             val opts = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(4)
+                setIntraOpNumThreads(2)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                // Don't let idle ORT threads spin-wait between calls — they'd steal cores from the ears.
+                try { addConfigEntry("session.intra_op.allow_spinning", "0") } catch (_: Throwable) {}
+                try { addConfigEntry("session.inter_op.allow_spinning", "0") } catch (_: Throwable) {}
             }
             encoder = env.createSession(File(dir, "encoder_model_quantized.onnx").absolutePath, opts)
             decoder = env.createSession(File(dir, "decoder_model_quantized.onnx").absolutePath, opts)
@@ -157,9 +160,54 @@ class MarianTranslator(private val dir: File) {
     }
 
     // ---------------- translation ----------------
-    /** Greedy decode; returns the translation or throws. */
+    /** Translates sentence by sentence (the model was trained on single sentences and stops after one). */
     fun translate(text: String): String {
         if (!ready) throw IllegalStateException(loadError ?: "translator not loaded")
+        val parts = splitSentences(text)
+        if (parts.size <= 1) return postFix(translateOne(text))
+        val sb = StringBuilder()
+        for (p in parts) {
+            val t = postFix(translateOne(p))
+            if (t.isBlank()) continue
+            if (sb.isNotEmpty()) sb.append(' ')
+            sb.append(t)
+        }
+        return sb.toString()
+    }
+
+    private fun splitSentences(text: String): List<String> {
+        val out = ArrayList<String>()
+        val sb = StringBuilder()
+        var i = 0
+        val t = text.trim()
+        while (i < t.length) {
+            val c = t[i]
+            sb.append(c)
+            if (c == '.' || c == '!' || c == '?' || c == '…') {
+                // End of sentence if followed by whitespace/end and not a decimal like 3.5
+                val next = if (i + 1 < t.length) t[i + 1] else ' '
+                val prev = if (i > 0) t[i - 1] else ' '
+                if ((next == ' ' || i + 1 >= t.length) && !(c == '.' && prev.isDigit() && next.isDigit())) {
+                    val s = sb.toString().trim()
+                    if (s.isNotEmpty()) out.add(s)
+                    sb.setLength(0)
+                }
+            }
+            i++
+        }
+        val rest = sb.toString().trim()
+        if (rest.isNotEmpty()) out.add(rest)
+        return out
+    }
+
+    // Small idiom fixes the sentence model gets wrong in travel talk.
+    private fun postFix(s: String): String {
+        var r = s
+        r = r.replace(Regex("\\b(on|in) (my|your|his|her) mind\\b"), "$1 $2 head")
+        return r
+    }
+
+    private fun translateOne(text: String): String {
         val ids = encode(text)
         val n = ids.size
         val inputIds = OnnxTensor.createTensor(env, LongBuffer.wrap(ids), longArrayOf(1, n.toLong()))
