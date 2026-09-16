@@ -66,6 +66,7 @@ class SpeechToText {
       audioCtx: ctx,
       allowedLangs: allowedLangs,
       singlePass: singlePass,
+      prevLang: prevLang,
     );
     final cands = <Candidate>[];
     for (final c in (res['candidates'] as List? ?? const [])) {
@@ -136,6 +137,39 @@ class SpeechToText {
       if (w[a + k].toLowerCase() != w[b + k].toLowerCase()) return false;
     }
     return true;
+  }
+
+  static final _fillers = [
+    RegExp(r"^(i'?m going to go to the next (video|one)\.?)$", caseSensitive: false),
+    RegExp(r'thank(s| you) for watching', caseSensitive: false),
+    RegExp(r'subtitles? by|subscribe|like and subscribe|see you in the next', caseSensitive: false),
+    RegExp(r'^\W*(sigh|music|applause|laughs?|laughter|inaudible|repeat)\W*$', caseSensitive: false),
+  ];
+
+  /// Whisper "hallucination": looping phrases ("the side of the side of the side")
+  /// or canned YouTube filler that has nothing to do with the audio.
+  static bool looksHallucinated(String t) {
+    final s = t.trim();
+    if (s.isEmpty) return false;
+    for (final f in _fillers) {
+      if (f.hasMatch(s)) return true;
+    }
+    final words = s.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '').split(RegExp(r'\s+'))
+      ..removeWhere((w) => w.isEmpty);
+    if (words.length < 6) return false;
+    // Any 2–4 word phrase appearing 3+ times, or the same phrase repeated back to back.
+    for (var n = 2; n <= 4; n++) {
+      final seen = <String, int>{};
+      for (var i = 0; i + n <= words.length; i++) {
+        final g = words.sublist(i, i + n).join(' ');
+        seen[g] = (seen[g] ?? 0) + 1;
+        if (seen[g]! >= 3) return true;
+        if (i + 2 * n <= words.length && words.sublist(i + n, i + 2 * n).join(' ') == g && n >= 3) return true;
+      }
+    }
+    // Very low lexical variety in a long line ("the one is the one that is the").
+    if (words.length >= 7 && words.toSet().length <= words.length / 2) return true;
+    return false;
   }
 
   /// True if the clean text is too short/uncertain to be worth speaking.

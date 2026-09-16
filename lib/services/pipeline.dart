@@ -204,6 +204,13 @@ class Pipeline extends ChangeNotifier {
     if (heard.candidates.length > 1) {
       _log('  decodes${heard.candidates.length > 1 && mmActive.activeEarsPlus ? ' (second look)' : ''}: ${heard.candidates.map((c) => '${c.lang} ${(math.exp(c.logprob) * 100).toStringAsFixed(0)}% "${SpeechToText.collapseRepeats(c.text)}"').join(' | ')}');
     }
+    if (SpeechToText.looksHallucinated(text)) {
+      _log('ignored (hallucination pattern)');
+      turn = Turn.listening;
+      status = 'Listening';
+      notifyListeners();
+      return;
+    }
     if (SpeechToText.looksLikeNoise(text) || SpeechToText.isFragment(text, heard.confidence)) {
       _log('ignored (noise/fragment)');
       turn = Turn.listening;
@@ -212,8 +219,11 @@ class Pipeline extends ChangeNotifier {
       return;
     }
     // Never speak a guess: below this the words are more likely wrong than right.
-    if (heard.confidence < minConfidence) {
-      _log('not sure enough (${conf}%) — not speaking it');
+    // One- or two-word results need to be surer still (they're usually shouts and half-words).
+    final wordCount = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    final needed = wordCount <= 2 ? 0.55 : minConfidence;
+    if (heard.confidence < needed) {
+      _log('not sure enough (${conf}% < ${(needed * 100).round()}%) — not speaking it');
       final guessFromThem = heard.lang != 'en';
       last = Exchange(guessFromThem, text, "Didn't catch that — say it again?", guessFromThem ? english.ttsLocale : other.ttsLocale);
       turn = Turn.listening;
@@ -238,6 +248,7 @@ class Pipeline extends ChangeNotifier {
       }
     }
     final src = fromThem ? other.code : 'en';
+    _stt?.prevLang = src; // a sentence we're about to act on — remember its language
     final tgt = fromThem ? 'en' : other.code;
     turn = fromThem ? Turn.them : Turn.you;
     expectThem = !fromThem;

@@ -52,6 +52,7 @@ struct whisper_params
     int audio_ctx = 0; // 0 = full 30 s window; else mel frames (50 per second)
     std::string allowed_langs; // comma list, e.g. "en,pl": restrict auto-detect to these
     bool single_pass = false;  // true: one decode with (restricted) auto-detect; false: decode per language
+    std::string prev_lang;     // language of the previous sentence ("" if none) — a flip away from it gets a second look
     bool translate = false;
     bool diarize = false;
     bool no_fallback = false;
@@ -148,6 +149,7 @@ json transcribe(json jsonBody)
     params.audio_ctx = jsonBody.value("audio_ctx", 0);
     params.allowed_langs = jsonBody.value("allowed_langs", std::string(""));
     params.single_pass = jsonBody.value("single_pass", false);
+    params.prev_lang = jsonBody.value("prev_lang", std::string(""));
     params.vad_mode = parse_vad_mode(jsonBody);
     params.vad_model_path = jsonBody.value("vad_model_path", std::string(""));
 
@@ -329,7 +331,15 @@ json transcribe(json jsonBody)
         // Second look: if the first decode was shaky (low token confidence or a
         // weak language call), decode once more in every OTHER language in play
         // and keep the most confident. Costs an extra encoder run only when unsure.
-        const bool shaky = (ntok > 0 && lp < std::log(0.45)) || (lpb >= 0 && lpb < 0.6f);
+        const double clip_s = (double)pcmf32.size() / WHISPER_SAMPLE_RATE;
+        const bool flipped = !params.prev_lang.empty() && params.prev_lang != first_lang;
+        // Shaky: low token confidence, weak language call, or a language flip from the last
+        // sentence without high confidence (Whisper likes to "hear" fluent English in foreign
+        // speech). Tiny clips skip the second look — they're fragments and it doubles the cost.
+        const bool shaky = clip_s >= 1.0 && (
+            (ntok > 0 && lp < std::log(0.45)) ||
+            (lpb >= 0 && lpb < 0.6f) ||
+            (flipped && ntok > 0 && lp < std::log(0.85)));
         std::vector<json> cj;
         {
             json j; j["lang"] = first_lang; j["text"] = text_result; j["logprob"] = lp; j["tokens"] = ntok;
