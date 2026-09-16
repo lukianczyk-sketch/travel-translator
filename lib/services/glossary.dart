@@ -56,6 +56,58 @@ class Glossary {
     },
   };
 
+  /// Polish food & menu words the translator gets wrong. Checked INSIDE sentences
+  /// too: if the sentence had "twarożek" and the English lacks "cottage cheese",
+  /// the meaning is appended so it's never lost. Keys are lower-case stems; a few
+  /// common inflections are listed.
+  static const Map<String, String> plFood = {
+    'twarożek': 'cottage cheese', 'twaróg': 'cottage cheese', 'twarożkiem': 'cottage cheese', 'twarogu': 'cottage cheese',
+    'jajka na miękko': 'soft-boiled eggs', 'jajko na miękko': 'soft-boiled egg', 'jajka na twardo': 'hard-boiled eggs',
+    'jajecznica': 'scrambled eggs', 'jajecznicę': 'scrambled eggs', 'jajka': 'eggs', 'jajko': 'egg',
+    'kiełbaski': 'sausages', 'kiełbasa': 'sausage', 'kiełbasę': 'sausage', 'parówki': 'frankfurters',
+    'pieczywo': 'bread', 'chleb': 'bread', 'chleba': 'bread', 'bułka': 'bread roll', 'bułki': 'bread rolls', 'bułkę': 'bread roll',
+    'masło': 'butter', 'masłem': 'butter', 'ser': 'cheese', 'sera': 'cheese', 'serem': 'cheese', 'szynka': 'ham', 'szynką': 'ham',
+    'śniadanie': 'breakfast', 'śniadania': 'breakfast', 'śniadaniu': 'breakfast', 'obiad': 'lunch', 'obiadu': 'lunch', 'kolacja': 'dinner', 'kolację': 'dinner',
+    'herbata': 'tea', 'herbatę': 'tea', 'herbaty': 'tea', 'kawa': 'coffee', 'kawę': 'coffee', 'kawy': 'coffee',
+    'woda': 'water', 'wodę': 'water', 'wody': 'water', 'piwo': 'beer', 'piwa': 'beer', 'wino': 'wine', 'wina': 'wine',
+    'sok': 'juice', 'soku': 'juice', 'mleko': 'milk', 'mleka': 'milk',
+    'kanapka': 'sandwich', 'kanapkę': 'sandwich', 'kanapki': 'sandwiches',
+    'rzodkiewka': 'radish', 'rzodkiewką': 'radish', 'szczypiorek': 'chives', 'szczypiorkiem': 'chives',
+    'jogurt': 'yogurt', 'jogurtem': 'yogurt', 'owoce': 'fruit', 'owocami': 'fruit', 'warzywa': 'vegetables', 'warzywami': 'vegetables',
+    'omlet': 'omelet', 'omleta': 'omelet', 'naleśniki': 'pancakes', 'naleśnik': 'pancake',
+    'pierogi': 'pierogi (dumplings)', 'pierogów': 'pierogi (dumplings)', 'bigos': 'bigos (hunter\'s stew)', 'żurek': 'żurek (sour rye soup)',
+    'barszcz': 'beetroot soup', 'rosół': 'chicken broth', 'kotlet schabowy': 'breaded pork cutlet', 'schabowy': 'breaded pork cutlet',
+    'placki ziemniaczane': 'potato pancakes', 'gołąbki': 'cabbage rolls', 'zapiekanka': 'zapiekanka (baguette pizza)',
+    'sernik': 'cheesecake', 'makowiec': 'poppy-seed cake', 'pączek': 'doughnut', 'pączki': 'doughnuts', 'ciasto': 'cake', 'ciasta': 'cake',
+    'lody': 'ice cream', 'zupa': 'soup', 'zupę': 'soup', 'zupy': 'soup', 'ryba': 'fish', 'rybę': 'fish', 'kurczak': 'chicken', 'kurczaka': 'chicken',
+    'wieprzowina': 'pork', 'wołowina': 'beef', 'ziemniaki': 'potatoes', 'frytki': 'fries', 'sałatka': 'salad', 'sałatkę': 'salad',
+    'ogórek': 'cucumber', 'pomidor': 'tomato', 'pomidory': 'tomatoes', 'cebula': 'onion', 'grzyby': 'mushrooms', 'kapusta': 'cabbage',
+    'rachunek': 'the bill', 'menu': 'menu', 'karta': 'menu', 'kelner': 'waiter', 'kelnerka': 'waitress', 'napiwek': 'tip',
+    'smacznego': 'enjoy your meal', 'na zdrowie': 'cheers',
+  };
+
+  /// For a Polish source sentence, returns "(term: meaning)" notes for food words
+  /// whose English meaning is missing from the translation. Empty if all present.
+  static String foodNotes(String src, String translated) {
+    if (src.isEmpty) return '';
+    final low = ' ${src.toLowerCase()} ';
+    final tl = translated.toLowerCase();
+    final notes = <String>[];
+    final seen = <String>{};
+    // Check two-word entries first, then single words.
+    final keys = plFood.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
+    for (final k in keys) {
+      if (!low.contains(RegExp('[^\\p{L}]${RegExp.escape(k)}[^\\p{L}]', unicode: true))) continue;
+      final meaning = plFood[k]!;
+      final core = meaning.split(' (').first.toLowerCase();
+      if (seen.contains(core)) continue;
+      seen.add(core);
+      if (!tl.contains(core)) notes.add('$k = $meaning');
+      if (notes.length >= 3) break;
+    }
+    return notes.isEmpty ? '' : ' (${notes.join('; ')})';
+  }
+
   static String _key(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}\s\x27]', unicode: true), '').replaceAll(RegExp(r'\s+'), ' ').trim();
 

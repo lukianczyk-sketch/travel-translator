@@ -50,10 +50,15 @@ class Pipeline extends ChangeNotifier {
 
   /// Volume test: their side into the earpiece (English), or your side out the phone speaker (their language).
   Future<void> testVoice({required bool earpiece}) async {
-    if (earpiece) {
-      await _speaker.test(speaker: false, locale: english.ttsLocale, phrase: 'Testing your earpiece. This is how they will sound.');
-    } else {
-      await _speaker.test(speaker: speakerForThem, locale: other.ttsLocale, phrase: 'Test. Test. Test.');
+    _listener.muted = true; // don't translate our own test phrase
+    try {
+      if (earpiece) {
+        await _speaker.test(speaker: false, locale: english.ttsLocale, phrase: 'Testing your earpiece. This is how they will sound.');
+      } else {
+        await _speaker.test(speaker: speakerForThem, locale: other.ttsLocale, phrase: 'Test. Test. Test.');
+      }
+    } finally {
+      _listener.muted = false;
     }
   }
   SpeechToText? _stt;
@@ -237,7 +242,11 @@ class Pipeline extends ChangeNotifier {
     // Never speak a guess: below this the words are more likely wrong than right.
     // One- or two-word results need to be surer still (they're usually shouts and half-words).
     final wordCount = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-    final needed = wordCount <= 2 ? 0.55 : minConfidence;
+    var needed = wordCount <= 2 ? 0.55 : minConfidence;
+    // A phrasebook match ("Dzień dobry", "dziękuję") is a known phrase — let it through at a lower bar.
+    final guessSrc = heard.lang != 'en' ? heard.lang : 'en';
+    final guessTgt = guessSrc == 'en' ? (others.isNotEmpty ? others.first.code : 'en') : 'en';
+    if (Glossary.lookup(text, guessSrc, guessTgt) != null) needed = 0.30;
     if (heard.confidence < needed) {
       _log('not sure enough (${conf}% < ${(needed * 100).round()}%) — not speaking it');
       final guessFromThem = heard.lang != 'en';
@@ -291,6 +300,13 @@ class Pipeline extends ChangeNotifier {
           }
         } else {
           tr = await mm.mlkit.translate(text, src, tgt);
+        }
+        if (src == 'pl') {
+          final notes = Glossary.foodNotes(text, tr);
+          if (notes.isNotEmpty) {
+            tr = '$tr$notes';
+            _log('food glossary added$notes');
+          }
         }
         _log('translated ($src→$tgt, $engine): "$tr" in ${DateTime.now().difference(t1).inMilliseconds} ms');
       }
