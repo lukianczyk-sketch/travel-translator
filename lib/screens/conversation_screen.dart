@@ -118,67 +118,64 @@ class _ConversationScreenState extends State<ConversationScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: Palette.bg2,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('VOLUME', style: TextStyle(color: Palette.gold, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2)),
-              const SizedBox(height: 4),
-              const Text('These set the phone\'s real volume for each route. Use the test buttons to hear each one.',
-                  style: TextStyle(color: Palette.muted, fontSize: 13)),
-              const SizedBox(height: 14),
-              _VolRow(
-                icon: Icons.headphones_rounded,
-                color: Palette.them,
-                label: 'THEM → IN YOUR EAR',
-                value: sp.earVolume,
-                onChanged: (v) => setSheet(() => sp.earVolume = v),
-                onDone: (_) => sp.saveVolumes(),
-              ),
-              const SizedBox(height: 10),
-              _VolRow(
-                icon: Icons.campaign_rounded,
-                color: Palette.you,
-                label: 'YOU → PHONE SPEAKER',
-                value: sp.speakerVolume,
-                onChanged: (v) => setSheet(() => sp.speakerVolume = v),
-                onDone: (_) => sp.saveVolumes(),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _BarBtn(
-                      icon: Icons.headphones_rounded,
-                      label: 'Test earpiece',
-                      on: false,
-                      tall: true,
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        _pipe.testVoice(earpiece: true);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _BarBtn(
-                      icon: Icons.campaign_rounded,
-                      label: 'Test phone speaker',
-                      on: false,
-                      tall: true,
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        _pipe.testVoice(earpiece: false);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
+        builder: (ctx, setSheet) => SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(ctx).viewInsets.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('VOLUME', style: TextStyle(color: Palette.gold, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                const SizedBox(height: 4),
+                const Text('Tap a test to hear each route. The sliders set the phone\'s real volume for that route.',
+                    style: TextStyle(color: Palette.muted, fontSize: 13)),
+                const SizedBox(height: 14),
+                _BarBtn(
+                  icon: Icons.headphones_rounded,
+                  label: 'TEST EARPIECE (their voice)',
+                  on: false,
+                  tall: true,
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    _pipe.testVoice(earpiece: true);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _BarBtn(
+                  icon: Icons.campaign_rounded,
+                  label: 'TEST PHONE SPEAKER (your voice)',
+                  on: false,
+                  tall: true,
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    _pipe.testVoice(earpiece: false);
+                  },
+                ),
+                const SizedBox(height: 18),
+                _VolRow(
+                  icon: Icons.headphones_rounded,
+                  color: Palette.them,
+                  label: 'THEM → IN YOUR EAR',
+                  value: sp.earVolume,
+                  onChanged: (v) => setSheet(() => sp.earVolume = v),
+                  onDone: (_) => sp.saveVolumes(),
+                ),
+                const SizedBox(height: 10),
+                _VolRow(
+                  icon: Icons.campaign_rounded,
+                  color: Palette.you,
+                  label: 'YOU → PHONE SPEAKER',
+                  value: sp.speakerVolume,
+                  onChanged: (v) => setSheet(() => sp.speakerVolume = v),
+                  onDone: (_) => sp.saveVolumes(),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ),
