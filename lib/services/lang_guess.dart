@@ -126,6 +126,34 @@ class LangGuess {
     return english >= bestScore ? null : best;
   }
 
+  /// Like [isEnglish] but returns null when the spelling gives no evidence
+  /// either way (a lone word with no accents and no common words).
+  static bool? isEnglishOrUnknown(String text, Language other) {
+    final t = text.toLowerCase();
+    final script = _scripts[other.code];
+    if (script != null) return !RegExp(script).hasMatch(t);
+    var foreign = 0.0;
+    var english = 0.0;
+    final accents = _accents[other.code] ?? '';
+    for (final ch in t.runes) {
+      if (accents.contains(String.fromCharCode(ch))) foreign += 2;
+    }
+    final words = t.split(RegExp(r'[^\p{L}]+', unicode: true)).where((w) => w.isNotEmpty).toList();
+    final theirs = _words[other.code] ?? const <String>{};
+    for (final w in words) {
+      if (_en.contains(w)) english += 1;
+      if (theirs.contains(w)) foreign += 1;
+    }
+    // Polish word shapes: typical endings that never occur in English words.
+    if (other.code == 'pl') {
+      for (final w in words) {
+        if (w.length >= 4 && RegExp(r'(nie|ość|ych|ego|emu|ami|cie|ała|ali|ały|owy|owa|owe|sz|cz|rz)$').hasMatch(w)) foreign += 0.5;
+      }
+    }
+    if (foreign == 0 && english == 0) return null;
+    return english >= foreign;
+  }
+
   /// True if [text] is English rather than [other].
   static bool isEnglish(String text, Language other) {
     final t = text.toLowerCase();

@@ -100,6 +100,8 @@ class Pipeline extends ChangeNotifier {
 
   /// True when the fast ears (Parakeet) are on and cover every language in play.
   bool _parakeet = false;
+  String _lastLang = '';
+  int _pendingSpeech = 0;
 
   Future<void> start() async {
     final mm = ModelManager.instance;
@@ -213,12 +215,19 @@ class Pipeline extends ChangeNotifier {
         final r = await ModelManager.instance.mlkit.parakeetTranscribe(path);
         final text = (r['text'] as String? ?? '').trim();
         final conf = (r['confidence'] as num?)?.toDouble() ?? 0.0;
-        // Parakeet hears 25 languages in one pass but doesn't say which — spelling settles it.
+        // Parakeet hears 25 languages in one pass but doesn't say which — spelling
+        // settles it; with no evidence either way, stay with the last sentence's language.
         String lang;
         if (others.length == 1) {
-          lang = LangGuess.isEnglish(text, others.first) ? 'en' : others.first.code;
+          final en = LangGuess.isEnglishOrUnknown(text, others.first);
+          if (en == null) {
+            lang = _lastLang.isEmpty ? 'en' : _lastLang;
+            _log('language unclear from spelling — staying with $lang');
+          } else {
+            lang = en ? 'en' : others.first.code;
+          }
         } else {
-          lang = LangGuess.detect(text, others)?.code ?? 'en';
+          lang = LangGuess.detect(text, others)?.code ?? (_lastLang.isEmpty ? 'en' : _lastLang);
         }
         heard = Heard(text, lang, null, conf > 0 ? math.log(conf) : null, null, const []);
         _log('parakeet timing: features ${r['msFeatures']} ms, encoder ${r['msEncoder']} ms, decode ${r['msDecode']} ms');
@@ -305,6 +314,7 @@ class Pipeline extends ChangeNotifier {
     }
     final src = fromThem ? other.code : 'en';
     _stt?.prevLang = src; // a sentence we're about to act on — remember its language
+    _lastLang = src;
     final tgt = fromThem ? 'en' : other.code;
     turn = fromThem ? Turn.them : Turn.you;
     expectThem = !fromThem;
@@ -370,8 +380,15 @@ class Pipeline extends ChangeNotifier {
       // listening and let the next clip decode while this one is still playing.
       final privateRoute = fromThem && _earbudsOn;
       final ts = DateTime.now();
+      _pendingSpeech++;
+      final myTicket = _pendingSpeech;
       _speakChain = _speakChain.then((_) async {
         if (_stopped) return;
+        // Fell more than two lines behind in your ear? Skip the stale ones (they stay on screen).
+        if (privateRoute && _pendingSpeech - myTicket >= 2) {
+          _log('speech backlog — skipped a stale line');
+          return;
+        }
         if (!privateRoute) _listener.muted = true; // don't hear ourselves
         try {
           await _speaker.say(tr, locale, forceSpeaker: toSpeaker);

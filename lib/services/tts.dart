@@ -15,7 +15,7 @@ class Speaker {
   Completer<void>? _done;
   bool _ready = false;
 
-  double rate = 0.55; // a touch quicker than default, still clear
+  double rate = 0.62; // quick but clear — keeps the ear feed close to live
 
   /// 0..1 — the phone's real volume for that route (earbuds/default vs phone speaker).
   double earVolume = 1.0; // their side → your earbud / default output

@@ -72,7 +72,7 @@ class MarianTranslator(private val dir: File) {
             if (decoderStartId < 0) decoderStartId = padId
 
             val opts = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(2)
+                setIntraOpNumThreads(4)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 // Don't let idle ORT threads spin-wait between calls — they'd steal cores from the ears.
                 try { addConfigEntry("session.intra_op.allow_spinning", "0") } catch (_: Throwable) {}
