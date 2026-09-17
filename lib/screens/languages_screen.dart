@@ -28,6 +28,15 @@ class LanguagesScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 12),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(color: Palette.card, borderRadius: BorderRadius.circular(14)),
+                child: Center(
+                  child: Text('VERSION $appVersion',
+                      style: const TextStyle(color: Palette.gold, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                ),
+              ),
               const SizedBox(height: 6),
               const Text(
                 'Get the Ears once (264 MB). Then tap a language to add it and Get its brain (about 60 MB). All offline after that.',
@@ -51,11 +60,6 @@ class LanguagesScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              Center(
-                child: Text('VERSION $appVersion',
-                    style: const TextStyle(color: Palette.gold, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
-              ),
-              const SizedBox(height: 6),
               Center(
                 child: TextButton.icon(
                   onPressed: () => Navigator.of(context).push(

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/language.dart';
+import '../theme.dart';
 import 'book_store.dart';
 import 'diag.dart';
 import 'glossary.dart';
@@ -129,6 +130,7 @@ class Pipeline extends ChangeNotifier {
   Future<void> start() async {
     final mm = ModelManager.instance;
     _parakeet = mm.activeFastEars && others.every((l) => ModelManager.fastEarsLangs.contains(l.code));
+    _log('app v$appVersion');
     _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (${_parakeet ? 'Parakeet TDT 0.6B v3' : '${mm.activeEarsName}, ${mm.activeEarsPlus ? 'single pass' : 'decode in every language'}'})');
     await WakelockPlus.enable();
     await _speaker.init();
