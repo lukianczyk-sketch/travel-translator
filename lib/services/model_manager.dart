@@ -136,6 +136,121 @@ class ModelManager extends ChangeNotifier {
     await setUseBrainPlus(false);
   }
 
+  // ---- Fast Ears: NVIDIA Parakeet TDT 0.6B v3 (25 European languages, int8, sherpa-onnx export) ----
+  static const fastEarsDir = 'parakeet-v3';
+  static const fastEarsFiles = ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'];
+  // Per-file mirror (fast, no unpacking); falls back to the release tarball + on-device unpack.
+  static const fastEarsFileBase = 'https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main';
+  static const fastEarsTarUrl =
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2';
+  static const fastEarsMb = 670;
+  /// Languages Parakeet v3 understands (ISO 639-1).
+  static const fastEarsLangs = {'bg', 'hr', 'cs', 'da', 'nl', 'en', 'et', 'fi', 'fr', 'de', 'el', 'hu', 'it', 'lv', 'lt', 'mt', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'es', 'sv', 'uk'};
+  bool fastEarsReady = false;
+  bool fastEarsDownloading = false;
+  double fastEarsProgress = 0;
+  String fastEarsStage = '';
+  String? fastEarsError;
+  bool useFastEars = true;
+  CancelToken? _fastEarsCancel;
+  bool get activeFastEars => useFastEars && fastEarsReady;
+  String get fastEarsPath => '$modelsPath/$fastEarsDir';
+
+  Future<void> setUseFastEars(bool v) async {
+    useFastEars = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('fast_ears', v);
+    notifyListeners();
+  }
+
+  Future<bool> _fastEarsOnDisk() async {
+    for (final f in fastEarsFiles) {
+      final file = File('$fastEarsPath/$f');
+      if (!await file.exists() || await file.length() < 1000) return false;
+    }
+    return true;
+  }
+
+  Future<void> downloadFastEars() async {
+    if (fastEarsDownloading) return;
+    fastEarsDownloading = true;
+    fastEarsError = null;
+    fastEarsProgress = 0;
+    fastEarsStage = 'Downloading';
+    notifyListeners();
+    _fastEarsCancel = CancelToken();
+    await Directory(fastEarsPath).create(recursive: true);
+    String? err;
+    // 1) per-file mirror
+    final weights = [0.96, 0.02, 0.01, 0.01];
+    var done = 0.0;
+    var mirrorOk = true;
+    for (var i = 0; i < fastEarsFiles.length; i++) {
+      final name = fastEarsFiles[i];
+      final target = '$fastEarsPath/$name';
+      if (await File(target).exists() && await File(target).length() > 1000) {
+        done += weights[i];
+        continue;
+      }
+      err = await _fetch('$fastEarsFileBase/$name', target, _fastEarsCancel!, (p) {
+        fastEarsProgress = done + weights[i] * p;
+        notifyListeners();
+      });
+      if (err != null) {
+        if (_fastEarsCancel!.isCancelled) break;
+        mirrorOk = false;
+        Diag.instance.log('fast ears: mirror failed for $name ($err) — trying the release tarball');
+        break;
+      }
+      done += weights[i];
+    }
+    // 2) release tarball + native unpack
+    if (!mirrorOk && !_fastEarsCancel!.isCancelled) {
+      fastEarsProgress = 0;
+      notifyListeners();
+      final tar = '$modelsPath/parakeet.tar.bz2';
+      err = await _fetch(fastEarsTarUrl, tar, _fastEarsCancel!, (p) {
+        fastEarsProgress = p * 0.8;
+        notifyListeners();
+      });
+      if (err == null) {
+        fastEarsStage = 'Unpacking';
+        fastEarsProgress = 0.85;
+        notifyListeners();
+        try {
+          final n = await mlkit.extractTarBz2(tar, fastEarsPath);
+          Diag.instance.log('fast ears: unpacked $n files');
+        } catch (e) {
+          err = 'Unpacking failed: $e';
+        }
+        try {
+          await File(tar).delete();
+        } catch (_) {}
+      }
+    }
+    fastEarsError = err;
+    fastEarsReady = await _fastEarsOnDisk();
+    if (fastEarsReady) {
+      await setUseFastEars(true);
+      Diag.instance.log('ears: parakeet v3 downloaded');
+    } else if (err == null && !_fastEarsCancel!.isCancelled) {
+      fastEarsError = 'Download finished but files are missing — try again.';
+    }
+    fastEarsDownloading = false;
+    fastEarsStage = '';
+    _fastEarsCancel = null;
+    notifyListeners();
+  }
+
+  void cancelFastEars() => _fastEarsCancel?.cancel();
+
+  Future<void> deleteFastEars() async {
+    final d = Directory(fastEarsPath);
+    if (await d.exists()) await d.delete(recursive: true);
+    fastEarsReady = false;
+    await setUseFastEars(false);
+  }
+
   /// The ears pack the conversation will actually use.
   bool get activeEarsPlus => useEarsPlus && earsPlusReady;
   String get activeEarsFile => activeEarsPlus ? earsPlusFile : earsFile;
@@ -176,6 +291,8 @@ class ModelManager extends ChangeNotifier {
     }
     useBrainPlus = prefs.getBool('brain_plus') ?? true;
     brainPlusReady = await _brainPlusOnDisk();
+    useFastEars = prefs.getBool('fast_ears') ?? true;
+    fastEarsReady = await _fastEarsOnDisk();
     _chosen.addAll(prefs.getStringList('langs') ?? const []);
     speechAvailable = await NativeStt.available();
     sdk = await NativeStt.sdk();

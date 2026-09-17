@@ -36,6 +36,8 @@ class LanguagesScreen extends StatelessWidget {
               const SizedBox(height: 14),
               _EarsCard(mm: mm),
               const SizedBox(height: 10),
+              _FastEarsCard(mm: mm),
+              const SizedBox(height: 10),
               _BrainPlusCard(mm: mm),
               const SizedBox(height: 10),
               _EarsPlusCard(mm: mm),
@@ -140,6 +142,103 @@ class _EarsCard extends StatelessWidget {
                   onPressed: mm.downloadEars,
                   icon: const Icon(Icons.download_rounded, size: 24),
                   label: const Text('Get the Ears (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Fast ears — NVIDIA Parakeet: 25 European languages, built for speed.
+class _FastEarsCard extends StatelessWidget {
+  final ModelManager mm;
+  const _FastEarsCard({required this.mm});
+  @override
+  Widget build(BuildContext context) {
+    final on = mm.activeFastEars;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: on ? Palette.you.withOpacity(0.8) : Colors.transparent, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.bolt_rounded, color: on ? Palette.you : Palette.muted, size: 28),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Fast Ears — Parakeet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text('Fast + sharp on Polish, German, Greek, French · about 670 MB, once', style: TextStyle(color: Palette.muted, fontSize: 14)),
+                  ],
+                ),
+              ),
+              if (mm.fastEarsReady)
+                Switch(
+                  value: mm.useFastEars,
+                  activeColor: Palette.you,
+                  onChanged: (v) => mm.setUseFastEars(v),
+                ),
+            ],
+          ),
+          if (mm.fastEarsReady) ...[
+            const SizedBox(height: 6),
+            Text(on ? 'ON — conversations use the fast ears (Japanese still uses Whisper).' : 'OFF — conversations use Whisper.',
+                style: TextStyle(color: on ? Palette.you : Palette.muted, fontSize: 14, fontWeight: FontWeight.w600)),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: mm.deleteFastEars,
+                child: const Text('Remove pack', style: TextStyle(color: Palette.muted)),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            if (mm.fastEarsDownloading) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: mm.fastEarsProgress == 0 ? null : mm.fastEarsProgress,
+                  minHeight: 12,
+                  backgroundColor: Palette.bg,
+                  color: Palette.you,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text('${mm.fastEarsStage} ${(mm.fastEarsProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(onPressed: mm.cancelFastEars, child: const Text('Cancel', style: TextStyle(color: Palette.them))),
+                ],
+              ),
+            ] else ...[
+              if (mm.fastEarsError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(mm.fastEarsError!, style: const TextStyle(color: Palette.them, fontSize: 14)),
+                ),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Palette.you,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: mm.downloadFastEars,
+                  icon: const Icon(Icons.download_rounded, size: 24),
+                  label: const Text('Get the Fast Ears (wifi)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],

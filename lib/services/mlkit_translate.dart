@@ -30,5 +30,20 @@ class MlkitTranslate {
     } catch (_) {}
   }
 
+  /// Unpack a .tar.bz2 (flattening paths) into [dest]; returns the file count.
+  Future<int> extractTarBz2(String path, String dest) async =>
+      await _m.invokeMethod<int>('extractTarBz2', {'path': path, 'dest': dest}) ?? 0;
+
+  Future<void> parakeetLoad(String dir) async => await _m.invokeMethod('parakeetLoad', {'dir': dir});
+  Future<void> parakeetUnload() async {
+    try {
+      await _m.invokeMethod('parakeetUnload');
+    } catch (_) {}
+  }
+
+  /// Returns {text, confidence, msFeatures, msEncoder, msDecode}.
+  Future<Map> parakeetTranscribe(String wavPath) async =>
+      await _m.invokeMethod<Map>('parakeetTranscribe', {'path': wavPath}) ?? const {};
+
   Future<void> dispose() async {}
 }

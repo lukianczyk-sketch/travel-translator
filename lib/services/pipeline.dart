@@ -98,9 +98,13 @@ class Pipeline extends ChangeNotifier {
     return f.path;
   }
 
+  /// True when the fast ears (Parakeet) are on and cover every language in play.
+  bool _parakeet = false;
+
   Future<void> start() async {
     final mm = ModelManager.instance;
-    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (${mm.activeEarsName}, ${mm.activeEarsPlus ? 'single pass' : 'decode in every language'})');
+    _parakeet = mm.activeFastEars && others.every((l) => ModelManager.fastEarsLangs.contains(l.code));
+    _log('pipeline start: languages=${others.map((l) => l.code).join(',')} (${_parakeet ? 'Parakeet TDT 0.6B v3' : '${mm.activeEarsName}, ${mm.activeEarsPlus ? 'single pass' : 'decode in every language'}'})');
     await WakelockPlus.enable();
     await _speaker.init();
     if (!NativeStt.isSupportedPlatform) {
@@ -110,15 +114,27 @@ class Pipeline extends ChangeNotifier {
     }
     status = 'Warming up the ears…';
     notifyListeners();
-    _stt = SpeechToText(
-      modelPath: mm.filePath(mm.activeEarsFile),
-      vadModelPath: await _vadPath(),
-      threads: 6,
-      singlePass: mm.activeEarsPlus,
-    );
-    final tw = DateTime.now();
-    final warmErr = await _stt!.warmUp(await ensureSilentWav(mm.modelsPath));
-    _log('whisper warm in ${DateTime.now().difference(tw).inMilliseconds} ms${warmErr != null ? ' (note: $warmErr)' : ''}');
+    if (_parakeet) {
+      final tw = DateTime.now();
+      try {
+        await mm.mlkit.parakeetLoad(mm.fastEarsPath);
+        _log('parakeet loaded in ${DateTime.now().difference(tw).inMilliseconds} ms');
+      } catch (e) {
+        _log('ERROR parakeet failed to load ($e) — falling back to Whisper');
+        _parakeet = false;
+      }
+    }
+    if (!_parakeet) {
+      _stt = SpeechToText(
+        modelPath: mm.filePath(mm.activeEarsFile),
+        vadModelPath: await _vadPath(),
+        threads: 6,
+        singlePass: mm.activeEarsPlus,
+      );
+      final tw = DateTime.now();
+      final warmErr = await _stt!.warmUp(await ensureSilentWav(mm.modelsPath));
+      _log('whisper warm in ${DateTime.now().difference(tw).inMilliseconds} ms${warmErr != null ? ' (note: $warmErr)' : ''}');
+    }
     if (mm.activeBrainPlus && others.any((l) => l.code == 'pl')) {
       final tb = DateTime.now();
       try {
@@ -193,9 +209,24 @@ class Pipeline extends ChangeNotifier {
     await writeWav(pcm, path);
     Heard heard;
     try {
-      heard = await _stt!.transcribe(path, seconds: seconds, allowedLangs: ['en', ...others.map((l) => l.code)]);
+      if (_parakeet) {
+        final r = await ModelManager.instance.mlkit.parakeetTranscribe(path);
+        final text = (r['text'] as String? ?? '').trim();
+        final conf = (r['confidence'] as num?)?.toDouble() ?? 0.0;
+        // Parakeet hears 25 languages in one pass but doesn't say which — spelling settles it.
+        String lang;
+        if (others.length == 1) {
+          lang = LangGuess.isEnglish(text, others.first) ? 'en' : others.first.code;
+        } else {
+          lang = LangGuess.detect(text, others)?.code ?? 'en';
+        }
+        heard = Heard(text, lang, null, conf > 0 ? math.log(conf) : null, null, const []);
+        _log('parakeet timing: features ${r['msFeatures']} ms, encoder ${r['msEncoder']} ms, decode ${r['msDecode']} ms');
+      } else {
+        heard = await _stt!.transcribe(path, seconds: seconds, allowedLangs: ['en', ...others.map((l) => l.code)]);
+      }
     } catch (e) {
-      _log('ERROR whisper: $e');
+      _log('ERROR ears: $e');
       turn = Turn.listening;
       status = 'Listening';
       notifyListeners();
@@ -221,7 +252,7 @@ class Pipeline extends ChangeNotifier {
     }
     final text = SpeechToText.collapseRepeats(heard.text);
     final conf = (heard.confidence * 100).toStringAsFixed(0);
-    _log('whisper (${heard.lang} ${conf}%${heard.margin != null ? ', margin ${heard.margin!.toStringAsFixed(2)}' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
+    _log('${_parakeet ? 'parakeet' : 'whisper'} (${heard.lang} ${conf}%${heard.margin != null ? ', margin ${heard.margin!.toStringAsFixed(2)}' : ''}): "$text" in ${t1.difference(t0).inMilliseconds} ms');
     if (heard.candidates.length > 1) {
       _log('  decodes${heard.candidates.length > 1 && mmActive.activeEarsPlus ? ' (second look)' : ''}: ${heard.candidates.map((c) => '${c.lang} ${(math.exp(c.logprob) * 100).toStringAsFixed(0)}% "${SpeechToText.collapseRepeats(c.text)}"').join(' | ')}');
     }
@@ -383,6 +414,7 @@ class Pipeline extends ChangeNotifier {
     await _speaker.stop();
     await _stt?.dispose();
     await ModelManager.instance.mlkit.marianUnload('pl>en');
+    if (_parakeet) await ModelManager.instance.mlkit.parakeetUnload();
     await WakelockPlus.disable();
   }
 }

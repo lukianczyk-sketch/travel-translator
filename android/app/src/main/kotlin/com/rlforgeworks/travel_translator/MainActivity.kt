@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
+import kotlin.math.min
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -54,6 +55,7 @@ class MainActivity : FlutterActivity() {
     private var quietCount = 0
     private val translators = HashMap<String, Translator>()
     private val marian = HashMap<String, MarianTranslator>() // "pl>en" → OPUS-MT engine
+    private var parakeet: ParakeetRecognizer? = null
     private var player: MediaPlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -149,6 +151,62 @@ class MainActivity : FlutterActivity() {
                             .deleteDownloadedModel(TranslateRemoteModel.Builder(code).build())
                             .addOnSuccessListener { result.success(true) }
                             .addOnFailureListener { result.error("mt", it.toString(), null) }
+                    }
+                    "extractTarBz2" -> {
+                        val src = java.io.File(call.argument<String>("path") ?: "")
+                        val dest = java.io.File(call.argument<String>("dest") ?: "")
+                        executor.execute {
+                            try {
+                                dest.mkdirs()
+                                val tin = org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
+                                    org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(
+                                        java.io.BufferedInputStream(java.io.FileInputStream(src), 1 shl 20)))
+                                var entry = tin.nextEntry
+                                var count = 0
+                                while (entry != null) {
+                                    if (!entry.isDirectory) {
+                                        val name = entry.name.substringAfterLast('/')
+                                        if (name.isNotEmpty() && !entry.name.contains("test_wavs")) {
+                                            val out = java.io.File(dest, name)
+                                            java.io.FileOutputStream(out).use { fos -> tin.copyTo(fos, 1 shl 20) }
+                                            count++
+                                        }
+                                    }
+                                    entry = tin.nextEntry
+                                }
+                                tin.close()
+                                main.post { result.success(count) }
+                            } catch (e: Throwable) {
+                                main.post { result.error("extract", e.toString(), null) }
+                            }
+                        }
+                    }
+                    "parakeetLoad" -> {
+                        val dir = java.io.File(call.argument<String>("dir") ?: "")
+                        executor.execute {
+                            val existing = parakeet
+                            if (existing != null && existing.ready) { main.post { result.success(true) }; return@execute }
+                            val p = ParakeetRecognizer(dir)
+                            val ok = p.load()
+                            if (ok) parakeet = p
+                            main.post { if (ok) result.success(true) else result.error("asr", p.loadError ?: "load failed", null) }
+                        }
+                    }
+                    "parakeetUnload" -> { parakeet?.close(); parakeet = null; result.success(true) }
+                    "parakeetTranscribe" -> {
+                        val path = call.argument<String>("path") ?: ""
+                        val p = parakeet
+                        if (p == null || !p.ready) { result.error("asr", "parakeet not loaded", null); return@setMethodCallHandler }
+                        executor.execute {
+                            try {
+                                val pcm = readWav16k(java.io.File(path))
+                                val r = p.transcribe(pcm)
+                                main.post { result.success(mapOf("text" to r.text, "confidence" to r.confidence,
+                                    "msFeatures" to r.msFeatures, "msEncoder" to r.msEncoder, "msDecode" to r.msDecode)) }
+                            } catch (e: Throwable) {
+                                main.post { result.error("asr", e.toString(), null) }
+                            }
+                        }
                     }
                     "marianLoad" -> {
                         val key = call.argument<String>("key") ?: ""
@@ -409,6 +467,25 @@ class MainActivity : FlutterActivity() {
             if (Build.VERSION.SDK_INT >= 31) am.clearCommunicationDevice() else am.setSpeakerphoneOn(false)
             am.mode = AudioManager.MODE_NORMAL
         } catch (_: Exception) {}
+    }
+
+    /** Reads a 16 kHz mono 16-bit PCM WAV (the app's own utterance files) into floats. */
+    private fun readWav16k(f: java.io.File): FloatArray {
+        val bytes = f.readBytes()
+        var pos = 12
+        var dataOff = -1; var dataLen = 0
+        while (pos + 8 <= bytes.size) {
+            val id = String(bytes, pos, 4, Charsets.US_ASCII)
+            val len = java.nio.ByteBuffer.wrap(bytes, pos + 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+            if (id == "data") { dataOff = pos + 8; dataLen = len; break }
+            pos += 8 + len + (len and 1)
+        }
+        if (dataOff < 0) throw IllegalArgumentException("no data chunk")
+        val n = min(dataLen, bytes.size - dataOff) / 2
+        val bb = java.nio.ByteBuffer.wrap(bytes, dataOff, n * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val out = FloatArray(n)
+        for (i in 0 until n) out[i] = bb.short / 32768f
+        return out
     }
 
     // ---------------- volume ----------------

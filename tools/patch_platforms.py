@@ -163,9 +163,9 @@ for name in ("android/app/build.gradle.kts", "android/app/build.gradle"):
         t = g.read_text()
         if "com.google.mlkit:translate" not in t:
             if name.endswith(".kts"):
-                t += '\ndependencies {\n    implementation("com.google.mlkit:translate:17.0.3")\n    implementation("com.microsoft.onnxruntime:onnxruntime-android:%s")\n}\n' % ort_version
+                t += '\ndependencies {\n    implementation("com.google.mlkit:translate:17.0.3")\n    implementation("com.microsoft.onnxruntime:onnxruntime-android:%s")\n    implementation("org.apache.commons:commons-compress:1.26.2")\n}\n' % ort_version
             else:
-                t += "\ndependencies {\n    implementation 'com.google.mlkit:translate:17.0.3'\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:%s'\n}\n" % ort_version
+                t += "\ndependencies {\n    implementation 'com.google.mlkit:translate:17.0.3'\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:%s'\n    implementation 'org.apache.commons:commons-compress:1.26.2'\n}\n" % ort_version
         if "libonnxruntime.so" not in t:
             if name.endswith(".kts"):
                 block = "android {\n    packaging {\n        jniLibs {\n            pickFirsts += setOf(%s)\n        }\n    }" % ", ".join('"%s"' % x for x in pick)
