@@ -48,6 +48,29 @@ class Pipeline extends ChangeNotifier {
   final Speaker _speaker = Speaker();
   Speaker get speaker => _speaker;
 
+  static bool _same(String a, String b) {
+    String n(String s) => s.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+    return n(a) == n(b);
+  }
+
+  static bool _looksLikeNameOrNumber(String t) {
+    final w = t.trim();
+    if (RegExp(r'^\W*\d').hasMatch(w)) return true;
+    // Single capitalised word that isn't sentence-initial noise — likely a name; leave it.
+    return RegExp(r'^[A-Z][a-z]+$').hasMatch(w.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '')) && w.split(' ').length == 1 && !w.endsWith('.');
+  }
+
+  /// True if the text's alphabet belongs to English or one of the languages in play.
+  bool _scriptFits(String text) {
+    final cyr = RegExp(r'[\u0400-\u04FF]').hasMatch(text);
+    if (cyr && !others.any((l) => const {'ru', 'uk', 'bg', 'sr', 'mk', 'be'}.contains(l.code))) return false;
+    final greek = RegExp(r'[\u0370-\u03FF]').hasMatch(text);
+    if (greek && !others.any((l) => l.code == 'el')) return false;
+    final cjk = RegExp(r'[\u3040-\u30FF\u4E00-\u9FFF]').hasMatch(text);
+    if (cjk && !others.any((l) => const {'ja', 'zh', 'ko'}.contains(l.code))) return false;
+    return true;
+  }
+
   /// Volume test: their side into the earpiece (English), or your side out the phone speaker (their language).
   Future<void> testVoice({required bool earpiece}) async {
     _listener.muted = true; // don't translate our own test phrase
@@ -312,10 +335,31 @@ class Pipeline extends ChangeNotifier {
         if (d != null) other = d;
       }
     }
-    final src = fromThem ? other.code : 'en';
+    // Wrong alphabet for the languages in play (e.g. a Cyrillic guess) → drop it.
+    if (!_scriptFits(text)) {
+      _log('ignored (script not in play): "$text"');
+      turn = Turn.listening;
+      status = 'Listening';
+      notifyListeners();
+      return;
+    }
+    var src = fromThem ? other.code : 'en';
+    var tgt = fromThem ? 'en' : other.code;
+    // "English" that the translator hands back unchanged wasn't English (a lone
+    // Polish word without accents). Flip it to their language.
+    if (!fromThem && others.length == 1 && !_looksLikeNameOrNumber(text)) {
+      try {
+        final probe = await ModelManager.instance.mlkit.translate(text, 'en', other.code);
+        if (_same(probe, text)) {
+          _log('"$text" unchanged by en→${other.code} — treating it as ${other.code}');
+          fromThem = true;
+          src = other.code;
+          tgt = 'en';
+        }
+      } catch (_) {}
+    }
     _stt?.prevLang = src; // a sentence we're about to act on — remember its language
     _lastLang = src;
-    final tgt = fromThem ? 'en' : other.code;
     turn = fromThem ? Turn.them : Turn.you;
     expectThem = !fromThem;
     status = 'Translating…';
