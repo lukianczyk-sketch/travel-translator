@@ -7,16 +7,15 @@ If no such version exists, report the issue to the plugin. If necessary, here is
 an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
 
 If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
-lib/services/pipeline.dart:251:11: Error: The setter 'prevLang' isn't defined for the type 'SpeechToText'.
- - 'SpeechToText' is from 'package:travel_translator/services/stt.dart' ('lib/services/stt.dart').
-Try correcting the name to the name of an existing setter, or defining a setter or field named 'prevLang'.
-    _stt?.prevLang = src; // a sentence we're about to act on — remember its language
-          ^^^^^^^^
-lib/services/stt.dart:69:17: Error: The getter 'prevLang' isn't defined for the type 'SpeechToText'.
- - 'SpeechToText' is from 'package:travel_translator/services/stt.dart' ('lib/services/stt.dart').
-Try correcting the name to the name of an existing getter, or defining a getter or field named 'prevLang'.
-      prevLang: prevLang,
-                ^^^^^^^^
+lib/services/lang_guess.dart:23:50: Error: Constant evaluation error:
+  static const Map<String, Set<String>> _words = {
+                                                 ^
+lib/services/lang_guess.dart:38:96: Context: The element '"może"' conflicts with another existing element in the set.
+      'chcę', 'chcesz', 'chce', 'chcemy', 'chcą', 'chciałbym', 'chciałabym', 'mogę', 'możesz', 'może',
+                                                                                          ^
+lib/services/lang_guess.dart:23:41: Context: While analyzing:
+  static const Map<String, Set<String>> _words = {
+                                        ^
 Target kernel_snapshot_program failed: Exception
 
 
@@ -32,6 +31,6 @@ Execution failed for task ':app:compileFlutterBuildRelease'.
 > Run with --scan to get full insights from a Build Scan (powered by Develocity).
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 2m 23s
-Running Gradle task 'assembleRelease'...                          143.7s
+BUILD FAILED in 2m 41s
+Running Gradle task 'assembleRelease'...                          162.0s
 Gradle task assembleRelease failed with exit code 1
