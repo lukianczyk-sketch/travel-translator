@@ -89,14 +89,28 @@ class Speaker {
     }
     final vol = forceSpeaker ? speakerVolume : earVolume;
     if (NativeStt.isSupportedPlatform && await NativeStt.hasExternalOutput()) {
-      // Earbuds/headset connected: play through our own player so each side
-      // is pinned to the right device (yours → speaker, theirs → earbuds).
-      final route = await _sayViaNative(text, vol, speaker: forceSpeaker);
-      if (route != null) {
-        Diag.instance.log('voice → ${forceSpeaker ? 'phone speaker' : 'earbuds'} ($route)');
+      if (forceSpeaker) {
+        // Your side: our own player pinned to the phone speaker.
+        final route = await _sayViaNative(text, vol, speaker: true);
+        if (route != null) {
+          Diag.instance.log('voice → phone speaker ($route)');
+          return;
+        }
+        Diag.instance.log('voice → speaker routing FAILED, using default output');
+      } else {
+        // Their side: stream straight from the voice engine to the earbuds (the
+        // default media route) — starts instantly instead of rendering a file first.
+        final info = await NativeStt.prepareEarbuds(vol);
+        await _tts.setVolume(1.0);
+        Diag.instance.log('voice → earbuds direct (${info ?? '?'}, level ${(vol * 100).round()}%)');
+        _done = Completer<void>();
+        await _tts.speak(text);
+        await _done!.future.timeout(
+          Duration(milliseconds: 1500 + text.length * 90),
+          onTimeout: () {},
+        );
         return;
       }
-      Diag.instance.log('voice → ${forceSpeaker ? 'speaker' : 'earbud'} routing FAILED, using default output');
     }
     // No earbuds: the phone's media volume follows the slider; the voice itself plays at full.
     if (NativeStt.isSupportedPlatform) await NativeStt.setLevel('media', vol);

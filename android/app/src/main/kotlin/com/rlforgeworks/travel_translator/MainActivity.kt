@@ -119,6 +119,15 @@ class MainActivity : FlutterActivity() {
                 }
                 "play" -> playFile(call.argument<String>("path") ?: "", call.argument<Boolean>("speaker") ?: true,
                                    (call.argument<Double>("volume") ?: 1.0).toFloat(), result)
+                "prepareEarbuds" -> {
+                    // Their side is about to play through the normal media route: make sure the
+                    // earbuds are out of call mode and the media level matches the slider.
+                    val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    leaveCallMode(am)
+                    setLevel("media", (call.argument<Double>("fraction") ?: 1.0).toFloat())
+                    @Suppress("DEPRECATION")
+                    result.success("mode=${am.mode} sco=${am.isBluetoothScoOn} a2dp=${am.isBluetoothA2dpOn}")
+                }
                 "setLevel" -> { setLevel(call.argument<String>("stream") ?: "media", (call.argument<Double>("fraction") ?: 1.0).toFloat()); result.success(true) }
                 "stopPlay" -> { stopPlayback(); result.success(true) }
                 else -> result.notImplemented()

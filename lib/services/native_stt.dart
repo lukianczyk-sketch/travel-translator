@@ -104,6 +104,15 @@ class NativeStt {
     }
   }
 
+  /// Before streaming their side straight from TTS to the earbuds: leave call mode, set the media level.
+  static Future<String?> prepareEarbuds(double fraction) async {
+    try {
+      return await _m.invokeMethod<String>('prepareEarbuds', {'fraction': fraction});
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Set a phone volume stream ('media' or 'call') to a fraction of its maximum.
   static Future<void> setLevel(String stream, double fraction) async {
     try {
