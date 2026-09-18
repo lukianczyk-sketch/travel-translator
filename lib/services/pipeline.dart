@@ -430,15 +430,21 @@ class Pipeline extends ChangeNotifier {
       final myTicket = _pendingSpeech;
       _speakChain = _speakChain.then((_) async {
         if (_stopped) return;
-        // Fell more than two lines behind in your ear? Skip the stale ones (they stay on screen).
-        if (privateRoute && _pendingSpeech - myTicket >= 2) {
-          _log('speech backlog — skipped a stale line');
+        // Behind in your ear? Talk faster rather than drop lines; only skip when four or more back.
+        final behind = _pendingSpeech - myTicket;
+        double? rateOverride;
+        if (privateRoute && behind >= 4) {
+          _log('speech backlog ($behind behind) — skipped a stale line');
           return;
+        } else if (privateRoute && behind >= 2) {
+          rateOverride = 0.9;
+        } else if (privateRoute && behind == 1) {
+          rateOverride = 0.75;
         }
         if (!privateRoute) _listener.muted = true; // don't hear ourselves
         try {
-          await _speaker.say(tr, locale, forceSpeaker: toSpeaker);
-          _log('spoke ($locale) for ${DateTime.now().difference(ts).inMilliseconds} ms${privateRoute ? ' (mic stayed open)' : ''}');
+          await _speaker.say(tr, locale, forceSpeaker: toSpeaker, rateOverride: rateOverride);
+          _log('spoke ($locale) for ${DateTime.now().difference(ts).inMilliseconds} ms${privateRoute ? ' (mic stayed open)' : ''}${rateOverride != null ? ' at rate $rateOverride' : ''}');
         } catch (e) {
           _log('ERROR tts: $e');
         } finally {

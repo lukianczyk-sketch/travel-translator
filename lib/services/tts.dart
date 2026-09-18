@@ -76,10 +76,17 @@ class Speaker {
   /// Speaks and completes when playback has finished.
   /// [forceSpeaker] plays through the phone speaker even with earbuds
   /// connected (Android) — for the other person to hear.
-  Future<void> say(String text, String locale, {bool forceSpeaker = false}) async {
+  double _currentRate = -1;
+
+  Future<void> say(String text, String locale, {bool forceSpeaker = false, double? rateOverride}) async {
     if (text.trim().isEmpty) return;
     await init();
     await _tts.setLanguage(locale);
+    final r = rateOverride ?? rate;
+    if (r != _currentRate) {
+      await _tts.setSpeechRate(r);
+      _currentRate = r;
+    }
     final vol = forceSpeaker ? speakerVolume : earVolume;
     if (NativeStt.isSupportedPlatform && await NativeStt.hasExternalOutput()) {
       // Earbuds/headset connected: play through our own player so each side
